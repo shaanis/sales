@@ -1,38 +1,82 @@
-import React,{ useEffect, useState } from "react";
-import { ArrowUpRight, CarFront, ClipboardList, Plus, ReceiptText } from "lucide-react";
+
+import React, { useEffect, useState } from "react";
+import {
+  ArrowUpRight,
+  CarFront,
+  ClipboardList,
+  Plus,
+  ReceiptText,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthProvider";
 import { listRecords } from "../../lib/data";
+import { TA_RATE_PER_KM } from "../reports/model";
 
 export default function DashboardPage() {
   const { user } = useAuth();
+
   const [reports, setReports] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [note, setNote] = useState("");
 
   useEffect(() => {
+    if (!user?.uid) return;
+
+    let active = true;
+
     Promise.all([
       listRecords(user.uid, "reports"),
       listRecords(user.uid, "expenses"),
     ])
-      .then(([r, e]) => {
-        setReports(r);
-        setExpenses(e);
+      .then(([reportRecords, expenseRecords]) => {
+        if (!active) return;
+
+        setReports(reportRecords);
+        setExpenses(expenseRecords);
+        setNote("");
       })
-      .catch(() => setNote("Could not load dashboard data. Check Firebase."));
-  }, [user.uid]);
+      .catch(() => {
+        if (active) {
+          setNote("Could not load dashboard data. Please check your connection.");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.uid]);
 
   const month = new Date().toLocaleDateString("en-CA").slice(0, 7);
 
-  const monthlyReports = reports.filter((r) => r.date?.startsWith(month));
-  const monthlyExpenses = expenses.filter((e) => e.date?.startsWith(month));
+  const monthlyReports = reports.filter((report) =>
+    report.date?.startsWith(month)
+  );
 
-  const km = monthlyExpenses.reduce((sum, e) => sum + Number(e.km || 0), 0);
-  const total = monthlyExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const monthlyExpenses = expenses.filter((expense) =>
+    expense.date?.startsWith(month)
+  );
 
-  const name = user.displayName?.split(" ")[0] || "there";
-  const money = (n) => "₹" + Number(n).toLocaleString("en-IN");
+  // Add kilometres only from TA entries
+  const km = monthlyExpenses.reduce((sum, expense) => {
+    if (expense.type !== "TA") return sum;
+
+    return sum + Number(expense.km || 0);
+  }, 0);
+
+  // TA = km × ₹3; all other expenses use their entered amount
+  const total = monthlyExpenses.reduce((sum, expense) => {
+    if (expense.type === "TA") {
+      return sum + Number(expense.km || 0) * TA_RATE_PER_KM;
+    }
+
+    return sum + Number(expense.amount || 0);
+  }, 0);
+
+  const name = user?.displayName?.split(" ")[0] || "there";
+
+  const money = (amount) =>
+    "₹" + Number(amount || 0).toLocaleString("en-IN");
 
   return (
     <>
@@ -53,21 +97,27 @@ export default function DashboardPage() {
 
       <div className="stats">
         <div className="stat">
-          <span><ClipboardList size={16} /> Reports this month</span>
+          <span>
+            <ClipboardList size={16} /> Reports this month
+          </span>
           <strong>{monthlyReports.length}</strong>
           <small>Saved daily reports</small>
         </div>
 
         <div className="stat">
-          <span><CarFront size={16} /> Travel distance</span>
-          <strong>{km} km</strong>
+          <span>
+            <CarFront size={16} /> Travel distance
+          </span>
+          <strong>{km.toLocaleString("en-IN")} km</strong>
           <small>Logged this month</small>
         </div>
 
         <div className="stat">
-          <span><ReceiptText size={16} /> Expenses logged</span>
+          <span>
+            <ReceiptText size={16} /> Expenses logged
+          </span>
           <strong>{money(total)}</strong>
-          <small>Current month</small>
+          <small>TA allowance + other expenses this month</small>
         </div>
       </div>
 
@@ -81,21 +131,27 @@ export default function DashboardPage() {
 
         <div className="quick-grid">
           <Link to="/report" className="quick-card">
-            <div className="quick-icon"><ClipboardList /></div>
+            <div className="quick-icon">
+              <ClipboardList />
+            </div>
             <strong>Create daily report</strong>
             <span>Build a WhatsApp-ready update</span>
             <ArrowUpRight size={16} />
           </Link>
 
           <Link to="/expenses" className="quick-card">
-            <div className="quick-icon"><CarFront /></div>
+            <div className="quick-icon">
+              <CarFront />
+            </div>
             <strong>Log travel or expenses</strong>
             <span>Save routes, kilometres and costs</span>
             <ArrowUpRight size={16} />
           </Link>
 
           <Link to="/history" className="quick-card">
-            <div className="quick-icon"><ReceiptText /></div>
+            <div className="quick-icon">
+              <ReceiptText />
+            </div>
             <strong>Report history</strong>
             <span>Find and share previous reports</span>
             <ArrowUpRight size={16} />
@@ -109,7 +165,10 @@ export default function DashboardPage() {
             <h2>Recent reports</h2>
             <p>Latest saved updates</p>
           </div>
-          <Link className="text-link" to="/history">View all →</Link>
+
+          <Link className="text-link" to="/history">
+            View all →
+          </Link>
         </div>
 
         {!reports.length ? (
@@ -117,21 +176,26 @@ export default function DashboardPage() {
             Your saved reports will appear here. Create your first report.
           </div>
         ) : (
-          reports.slice(0, 5).map((r) => (
-            <div className="recent-row" key={r.id}>
-              <div className="date-square">
-                {r.date?.slice(8, 10)}
-                <small>{r.date?.slice(5, 7)}</small>
-              </div>
+          [...reports]
+            .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+            .slice(0, 5)
+            .map((report) => (
+              <div className="recent-row" key={report.id}>
+                <div className="date-square">
+                  {report.date?.slice(8, 10) || "—"}
+                  <small>{report.date?.slice(5, 7) || ""}</small>
+                </div>
 
-              <div className="recent-info">
-                <b>{r.area || "Daily sales report"}</b>
-                <small>
-                  {r.date} · {r.executive || "Sales executive"} · {r.poCount || "—"} PO
-                </small>
+                <div className="recent-info">
+                  <b>{report.area || "Daily sales report"}</b>
+                  <small>
+                    {report.date || "No date"} ·{" "}
+                    {report.executive || "Sales executive"} ·{" "}
+                    {report.poCount || "—"} PO
+                  </small>
+                </div>
               </div>
-            </div>
-          ))
+            ))
         )}
       </section>
     </>
