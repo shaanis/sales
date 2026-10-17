@@ -96,11 +96,11 @@ export function formatReport(report, expenses = []) {
     })
     .join("; ");
 
-  return `*DAILY SALES REPORT*
-*Date:* ${report.date ? report.date.split("-").reverse().join("/") : "—"}
+  return `📊 *DAILY SALES REPORT* 📊
+*Date:* ${report.date ? report.date.split("-").reverse().join("/") : " "}
 *Executive:* ${value(report.executive)}
 
-*TODAY'S UPDATE*
+🚀 *TODAY'S UPDATE*
 • AREA: ${value(report.area)}
 • NEW LEADS COLLECTED: ${value(report.newLeads)}
 • SITE SURVEY DONE: ${value(report.siteSurvey)}
@@ -112,13 +112,8 @@ export function formatReport(report, expenses = []) {
 • DEALER/B2B VISITS: ${value(report.dealerVisits)}
 • PAYMENT COLLECTED: ${value(report.paymentCollected)}
 
-*TRAVEL & EXPENSES*
-• TA / ROUTE: ${routes || "—"}
-• TOTAL TA ALLOWANCE: ₹${taAmount.toLocaleString("en-IN")}
-• FOOD / OTHER: ${expenseNotes || "—"}
-• TODAY'S TRAVEL: ${km} km
 
-*MTD UPDATE*
+🚀 *MTD UPDATE*
 • TOTAL PO COUNT: ${value(report.totalPoCount)}
 • MTD PO COUNT: ${value(report.mtdPoCount)}
 • MTD CLOSURE: ${value(report.mtdClosure)}
@@ -129,7 +124,7 @@ export function formatReport(report, expenses = []) {
 • COLLECTION PENDING: ${value(report.collectionPending)}
 • DEALER / B2B VISITS: ${value(report.mtdDealerVisits)}
 
-*TOMORROW'S TOP 3 FOCUS*
+🎯 *TOMORROW'S TOP 3 FOCUS*
 1. ${value(report.focus1)}
 2. ${value(report.focus2)}
 3. ${value(report.focus3)}`;
