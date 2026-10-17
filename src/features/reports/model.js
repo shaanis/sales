@@ -54,7 +54,7 @@ export const mtdFields = [
 ];
 
 export function formatReport(report, expenses = []) {
-  const value = (v) => (v !== undefined && v !== null && v !== "" ? v : "—");
+  const value = (v) => (v !== undefined && v !== null && v !== "" ? v : "");
 
   // Only expenses belonging to the selected report date
   const today = expenses.filter((e) => e.date === report.date);
