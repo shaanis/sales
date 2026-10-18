@@ -8,6 +8,7 @@ import ReportPage from "../features/reports/ReportPage";
 import ExpensesPage from "../features/expenses/ExpensesPage";
 import HistoryPage from "../features/reports/HistoryPage";
 import AppShell from "../components/AppShell";
+import ExpenseHistoryPage from "../features/expenses/ExpenseHistoryPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -65,6 +66,14 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+  path="/expense-history"
+  element={
+    <AppShell>
+      <ExpenseHistoryPage />
+    </AppShell>
+  }
+/>
 
       <Route
         path="/history"

@@ -1,11 +1,12 @@
+
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, CalendarDays, Route } from "lucide-react";
+import { Plus, CalendarDays, ReceiptText, CheckCircle2 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
 import {
   addRecord,
   listRecords,
-  deleteRecord,
+  updateRecord,
 } from "../../lib/data";
 import { Field, Input } from "../../components/Field";
 
@@ -28,7 +29,10 @@ const freshEntry = () => ({
 });
 
 const money = (value) =>
-  "₹" + Number(value || 0).toLocaleString("en-IN");
+  "₹" +
+  Number(value || 0).toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+  });
 
 const getAmount = (item) =>
   item.type === "TA"
@@ -38,15 +42,23 @@ const getAmount = (item) =>
 const getWeekStart = (dateString) => {
   const date = new Date(`${dateString}T12:00:00`);
   const day = date.getDay();
+
   date.setDate(date.getDate() - (day === 0 ? 6 : day - 1));
+
+  return localDate(date);
+};
+
+const getWeekEnd = (dateString) => {
+  const date = new Date(`${getWeekStart(dateString)}T12:00:00`);
+  date.setDate(date.getDate() + 6);
   return localDate(date);
 };
 
 const formatDate = (dateString) =>
   new Date(`${dateString}T12:00:00`).toLocaleDateString("en-IN", {
-    weekday: "long",
+    weekday: "short",
     day: "2-digit",
-    month: "long",
+    month: "short",
     year: "numeric",
   });
 
@@ -54,117 +66,99 @@ export default function ExpensesPage() {
   const { user } = useAuth();
 
   const [form, setForm] = useState(freshEntry);
-  const [items, setItems] = useState([]);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const [filter, setFilter] = useState("month");
-  const [selectedDate, setSelectedDate] = useState(localDate());
+  const [items, setItems] = useState([]);
+  const [officeSubmissions, setOfficeSubmissions] = useState([]);
+  const [submissionNote, setSubmissionNote] = useState("");
+  const [submissionBusy, setSubmissionBusy] = useState(false);
+
+  const currentWeekStart = getWeekStart(localDate());
+  const currentWeekEnd = getWeekEnd(localDate());
 
   async function refresh() {
+    if (!user?.uid) {
+      setItems([]);
+      setOfficeSubmissions([]);
+      return;
+    }
+
     try {
-      const records = await listRecords(user.uid, "expenses");
-      setItems(records);
-    } catch {
-      setNote("Could not load entries. Please check your database settings.");
+      const [expenses, submissions] = await Promise.all([
+        listRecords(user.uid, "expenses"),
+        listRecords(user.uid, "officeSubmissions"),
+      ]);
+
+      setItems(expenses || []);
+      setOfficeSubmissions(submissions || []);
+
+      const savedSubmission = (submissions || []).find(
+        (item) =>
+          item.periodStart === currentWeekStart &&
+          item.periodEnd === currentWeekEnd
+      );
+
+      setSubmissionNote(savedSubmission?.note || "");
+    } catch (error) {
+      console.error("Could not load expense data:", error);
+      setNote("Could not load entries. Please check your connection.");
     }
   }
 
   useEffect(() => {
     refresh();
-  }, [user.uid]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
 
   const calculatedAmount =
-    form.type === "TA" ? Number(form.km || 0) * TA_RATE : Number(form.amount || 0);
+    form.type === "TA"
+      ? Number(form.km || 0) * TA_RATE
+      : Number(form.amount || 0);
 
-  function set(key, value) {
+  function updateForm(key, value) {
     setForm((previous) => {
       const next = { ...previous, [key]: value };
 
-      // TA amount is always calculated at ₹3 per kilometre.
       if (next.type === "TA") {
         next.amount = String(Number(next.km || 0) * TA_RATE);
       }
 
-      // Switching away from TA allows manual expense entry.
       if (key === "type" && value !== "TA") {
         next.amount = "";
+        next.km = "";
       }
 
       return next;
     });
   }
 
-  const filteredItems = useMemo(() => {
-    const today = localDate();
-    const currentMonth = today.slice(0, 7);
-    const currentWeek = getWeekStart(today);
-    const selectedWeek = getWeekStart(selectedDate);
+  async function submit(event) {
+    event.preventDefault();
 
-    return items
-      .filter((item) => {
-        if (!item.date) return false;
+    if (!user?.uid) {
+      setNote("Please log in before saving an entry.");
+      return;
+    }
 
-        if (filter === "day") {
-          return item.date === selectedDate;
-        }
+    const km = Number(form.km || 0);
+    const amount =
+      form.type === "TA" ? km * TA_RATE : Number(form.amount || 0);
 
-        if (filter === "week") {
-          return getWeekStart(item.date) === selectedWeek;
-        }
+    if (form.type === "TA" && km <= 0) {
+      setNote("Please enter a distance greater than 0 km.");
+      return;
+    }
 
-        return item.date.startsWith(currentMonth);
-      })
-      .sort((a, b) => {
-        if (a.date !== b.date) return b.date.localeCompare(a.date);
-        return String(b.createdAt || "").localeCompare(
-          String(a.createdAt || "")
-        );
-      });
-  }, [items, filter, selectedDate]);
+    if (form.type !== "TA" && amount <= 0) {
+      setNote("Please enter an amount greater than ₹0.");
+      return;
+    }
 
-  const groupedItems = useMemo(() => {
-    return filteredItems.reduce((groups, item) => {
-      if (!groups[item.date]) groups[item.date] = [];
-      groups[item.date].push(item);
-      return groups;
-    }, {});
-  }, [filteredItems]);
-
-  const totalKm = filteredItems.reduce(
-    (sum, item) =>
-      sum + (item.type === "TA" ? Number(item.km || 0) : 0),
-    0
-  );
-
-  const totalTA = filteredItems.reduce(
-    (sum, item) =>
-      sum + (item.type === "TA" ? Number(item.km || 0) * TA_RATE : 0),
-    0
-  );
-
-  const totalExpenses = filteredItems.reduce(
-    (sum, item) => sum + getAmount(item),
-    0
-  );
-
-  async function submit(e) {
-    e.preventDefault();
     setBusy(true);
     setNote("");
 
     try {
-      const km = Number(form.km || 0);
-
-      if (form.type === "TA" && km <= 0) {
-        setNote("Please enter a distance greater than 0 km.");
-        setBusy(false);
-        return;
-      }
-
-      const amount =
-        form.type === "TA" ? km * TA_RATE : Number(form.amount || 0);
-
       await addRecord(user.uid, "expenses", {
         ...form,
         km: form.type === "TA" ? km : 0,
@@ -173,280 +167,347 @@ export default function ExpensesPage() {
 
       setForm(freshEntry());
       await refresh();
-      setNote("Entry saved successfully.");
+      setNote("Expense entry saved successfully.");
     } catch (error) {
+      console.error("Expense save failed:", error);
       setNote(`Save failed: ${error.code || error.message}`);
     } finally {
       setBusy(false);
     }
   }
 
-  async function removeEntry(id) {
-    if (!window.confirm("Delete this expense entry?")) return;
+  const currentWeekExpenses = useMemo(
+    () =>
+      items.filter(
+        (item) =>
+          item.date >= currentWeekStart &&
+          item.date <= currentWeekEnd
+      ),
+    [items, currentWeekStart, currentWeekEnd]
+  );
+
+  const currentWeekTotal = currentWeekExpenses.reduce(
+    (sum, item) => sum + getAmount(item),
+    0
+  );
+
+  const currentSubmission = officeSubmissions.find(
+    (item) =>
+      item.periodStart === currentWeekStart &&
+      item.periodEnd === currentWeekEnd
+  );
+
+  const sortedSubmissions = [...officeSubmissions].sort((a, b) =>
+    String(b.periodStart || "").localeCompare(
+      String(a.periodStart || "")
+    )
+  );
+
+  async function markOfficeSubmitted() {
+    if (!user?.uid) {
+      setNote("Please log in first.");
+      return;
+    }
+
+    if (currentWeekExpenses.length === 0) {
+      setNote("There are no expenses for the current week.");
+      return;
+    }
+
+    const confirmMessage = currentSubmission
+      ? "Update this week's office submission record?"
+      : `Mark ${money(currentWeekTotal)} as submitted to the office?`;
+
+    if (!window.confirm(confirmMessage)) return;
+
+    setSubmissionBusy(true);
+    setNote("");
 
     try {
-      await deleteRecord(user.uid, "expenses", id);
-      setItems((previous) => previous.filter((item) => item.id !== id));
-      setNote("Entry deleted.");
-    } catch {
-      setNote("Could not delete this entry.");
+      const now = new Date().toISOString();
+
+      const submissionData = {
+        ownerUid: user.uid,
+        periodStart: currentWeekStart,
+        periodEnd: currentWeekEnd,
+        submittedAmount: currentWeekTotal,
+        submitted: true,
+        submittedAt: currentSubmission?.submittedAt || now,
+        note: submissionNote.trim(),
+        updatedAt: now,
+      };
+
+      if (currentSubmission?.id) {
+        await updateRecord(
+          user.uid,
+          "officeSubmissions",
+          currentSubmission.id,
+          submissionData
+        );
+      } else {
+        await addRecord(
+          user.uid,
+          "officeSubmissions",
+          submissionData
+        );
+      }
+
+      await refresh();
+      setNote("Office submission record saved successfully.");
+    } catch (error) {
+      console.error("Submission save failed:", error);
+      setNote(
+        `Could not save submission: ${error.code || error.message}`
+      );
+    } finally {
+      setSubmissionBusy(false);
     }
   }
 
   return (
-    <>
+    <div className="space-y-6">
       <header className="page-header">
         <div>
           <div className="eyebrow">FIELD ACTIVITY</div>
-          <h1>Travel & expenses</h1>
+          <h1>Travel &amp; expenses</h1>
           <p>
-            Same-date entries are grouped together. TA is calculated at ₹3/km.
+            Add travel and expense entries. TA is calculated at ₹3 per km.
           </p>
         </div>
       </header>
 
-      {note && <div className="notice">{note}</div>}
-
-      <div className="stats">
-        <div className="stat">
-          <span>Travel distance</span>
-          <strong>{totalKm.toLocaleString("en-IN")} km</strong>
+      {note && (
+        <div className="notice" role="status">
+          {note}
         </div>
+      )}
 
-        <div className="stat">
-          <span>TA allowance</span>
-          <strong>{money(totalTA)}</strong>
-          <small>₹3 per km</small>
-        </div>
-
-        <div className="stat">
-          <span>Total expenses</span>
-          <strong>{money(totalExpenses)}</strong>
-          <small>{filteredItems.length} entries in selected period</small>
-        </div>
-      </div>
-
-      <div className="expense-layout">
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Add an entry</h2>
-              <p>Save one trip or expense at a time.</p>
-            </div>
+      {/* Add expense form */}
+      <section className="panel">
+        <div className="panel-heading">
+          <div>
+            <h2>Add an entry</h2>
+            <p>Save one trip or expense at a time.</p>
           </div>
+        </div>
 
-          <form onSubmit={submit}>
-            <div className="form-grid">
-              <Field label="Date">
+        <form onSubmit={submit}>
+          <div className="form-grid">
+            <Field label="Date">
+              <Input
+                type="date"
+                value={form.date}
+                onChange={(value) => updateForm("date", value)}
+                required
+              />
+            </Field>
+
+            <Field label="Category">
+              <select
+                value={form.type}
+                onChange={(event) =>
+                  updateForm("type", event.target.value)
+                }
+              >
+                <option value="TA">TA</option>
+                <option value="Food">Food</option>
+                <option value="SIM / recharge">SIM / recharge</option>
+                <option value="Other">Other</option>
+              </select>
+            </Field>
+
+            {form.type === "TA" && (
+              <Field label="Distance (km)">
                 <Input
-                  type="date"
-                  value={form.date}
-                  onChange={(v) => set("date", v)}
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={form.km}
+                  onChange={(value) => updateForm("km", value)}
+                  placeholder="e.g. 33"
                   required
                 />
               </Field>
+            )}
 
-              <Field label="Category">
-                <select
-                  value={form.type}
-                  onChange={(e) => set("type", e.target.value)}
-                >
-                  <option>TA</option>
-                  <option>Food</option>
-                  <option>SIM / recharge</option>
-                  <option>Other</option>
-                </select>
-              </Field>
+            <Field
+              label={
+                form.type === "TA"
+                  ? "Calculated TA (₹)"
+                  : "Amount (₹)"
+              }
+            >
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={
+                  form.type === "TA"
+                    ? calculatedAmount
+                    : form.amount
+                }
+                onChange={(value) => updateForm("amount", value)}
+                placeholder="0"
+                readOnly={form.type === "TA"}
+                required={form.type !== "TA"}
+              />
 
               {form.type === "TA" && (
-                <Field label="Distance (km)">
-                  <Input
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    value={form.km}
-                    onChange={(v) => set("km", v)}
-                    placeholder="e.g. 33"
-                    required
-                  />
-                </Field>
+                <small className="hint">
+                  {form.km || 0} km × ₹{TA_RATE} ={" "}
+                  {money(calculatedAmount)}
+                </small>
               )}
+            </Field>
 
-              <Field label={form.type === "TA" ? "Calculated TA (₹)" : "Amount (₹)"}>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.type === "TA" ? calculatedAmount : form.amount}
-                  onChange={(v) => {
-                    if (form.type !== "TA") set("amount", v);
-                  }}
-                  placeholder="0"
-                  readOnly={form.type === "TA"}
-                  required={form.type !== "TA"}
-                />
-                {form.type === "TA" && (
-                  <small className="hint">
-                    {form.km || 0} km × ₹3 = {money(calculatedAmount)}
-                  </small>
-                )}
-              </Field>
-
-              <Field label="Route / places visited" className="span-2">
-                <Input
-                  value={form.route}
-                  onChange={(v) => set("route", v)}
-                  placeholder="Valanchery → Edappal"
-                  required={form.type === "TA"}
-                />
-              </Field>
-
-              <Field label="Notes" className="span-2">
-                <Input
-                  value={form.note}
-                  onChange={(v) => set("note", v)}
-                  placeholder="Additional details"
-                />
-              </Field>
-            </div>
-
-            <button className="btn primary" disabled={busy} type="submit">
-              <Plus size={16} />
-              {busy ? "Saving..." : "Save entry"}
-            </button>
-          </form>
-        </section>
-
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Expense log</h2>
-              <p>Entries grouped by date.</p>
-            </div>
-          </div>
-
-          <div className="filter-bar">
-            {[
-              ["day", "Day"],
-              ["week", "Week"],
-              ["month", "Month"],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={`btn ${filter === value ? "primary" : "secondary"}`}
-                onClick={() => setFilter(value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {filter !== "month" && (
-            <Field label={filter === "day" ? "Select day" : "Select a date in the week"}>
+            <Field label="Route / places visited" className="span-2">
               <Input
-                type="date"
-                value={selectedDate}
-                onChange={setSelectedDate}
+                value={form.route}
+                onChange={(value) => updateForm("route", value)}
+                placeholder="Valanchery → Edappal"
+                required={form.type === "TA"}
               />
             </Field>
-          )}
 
-          <div className="expense-summary">
-            <span>
-              {filter === "day"
-                ? `Selected day: ${selectedDate}`
-                : filter === "week"
-                ? `Week starting Monday: ${getWeekStart(selectedDate)}`
-                : `Current month: ${localDate().slice(0, 7)}`}
-            </span>
-            <b>{money(totalExpenses)}</b>
+            <Field label="Notes" className="span-2">
+              <Input
+                value={form.note}
+                onChange={(value) => updateForm("note", value)}
+                placeholder="Additional details"
+              />
+            </Field>
           </div>
 
-          {!Object.keys(groupedItems).length ? (
-            <div className="empty">
-              No entries found for this period.
+          <button
+            className="btn primary"
+            disabled={busy}
+            type="submit"
+          >
+            <Plus size={16} />
+            {busy ? "Saving..." : "Save entry"}
+          </button>
+        </form>
+      </section>
+
+      {/* Current week's office submission */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+              Weekly meeting
             </div>
-          ) : (
-            <div className="date-groups">
-              {Object.entries(groupedItems)
-                .sort(([a], [b]) => b.localeCompare(a))
-                .map(([date, dateItems]) => {
-                  const dayKm = dateItems.reduce(
-                    (sum, item) =>
-                      sum + (item.type === "TA" ? Number(item.km || 0) : 0),
-                    0
-                  );
+            <h2 className="mt-1 text-xl font-bold text-slate-900">
+              Office expense submission
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Record that this week's expenses were submitted to the
+              office. This does not track approval or payment.
+            </p>
+            <p className="mt-2 text-sm font-medium text-slate-500">
+              {formatDate(currentWeekStart)} –{" "}
+              {formatDate(currentWeekEnd)}
+            </p>
+          </div>
 
-                  const dayTotal = dateItems.reduce(
-                    (sum, item) => sum + getAmount(item),
-                    0
-                  );
-
-                  return (
-                    <div className="date-group" key={date}>
-                      <div className="date-group-heading">
-                        <div>
-                          <h3>
-                            <CalendarDays size={16} /> {formatDate(date)}
-                          </h3>
-                          <small>
-                            {dateItems.length} entries · {dayKm} km
-                          </small>
-                        </div>
-                        <strong>{money(dayTotal)}</strong>
-                      </div>
-
-                      <div className="table-wrap">
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Category / route</th>
-                              <th>KM</th>
-                              <th>Amount</th>
-                              <th>Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {dateItems.map((item) => (
-                              <tr key={item.id}>
-                                <td>
-                                  <b className="tag">{item.type}</b>
-                                  <div className="route">
-                                    {item.route || item.note || "—"}
-                                  </div>
-                                  {item.note && item.route && (
-                                    <small>{item.note}</small>
-                                  )}
-                                </td>
-                                <td>
-                                  {item.type === "TA"
-                                    ? `${Number(item.km || 0)} km`
-                                    : "—"}
-                                </td>
-                                <td>{money(getAmount(item))}</td>
-                                <td>
-                                  <button
-                                    type="button"
-                                    className="icon-btn"
-                                    title="Delete entry"
-                                    onClick={() => removeEntry(item.id)}
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  );
-                })}
+          <div className="rounded-xl bg-slate-50 px-4 py-3 sm:min-w-44">
+            <div className="text-sm text-slate-500">
+              This week's expenses
             </div>
-          )}
+            <div className="mt-1 text-2xl font-bold text-slate-900">
+              {money(currentWeekTotal)}
+            </div>
+            <div className="mt-1 text-xs text-slate-500">
+              {currentWeekExpenses.length} entries · Mon–Sun
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+              Note (optional)
+            </span>
+            <textarea
+              value={submissionNote}
+              onChange={(event) => setSubmissionNote(event.target.value)}
+              rows={2}
+              placeholder="e.g. Submitted during Monday weekly meeting"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+          </label>
+
+          <div className="flex flex-col gap-2">
+            {currentSubmission?.submitted && (
+              <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+                <CheckCircle2 size={16} />
+                Submitted
+                {currentSubmission.submittedAt
+                  ? ` on ${new Date(
+                      currentSubmission.submittedAt
+                    ).toLocaleDateString("en-IN")}`
+                  : ""}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={markOfficeSubmitted}
+              disabled={
+                submissionBusy || currentWeekExpenses.length === 0
+              }
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {submissionBusy
+                ? "Saving..."
+                : currentSubmission
+                ? "Update submission record"
+                : "Mark as submitted to office"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Previous office submissions */}
+      {sortedSubmissions.length > 0 && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+          <div className="flex items-center gap-2">
+            <CalendarDays size={20} className="text-slate-500" />
+            <h2 className="text-lg font-bold text-slate-900">
+              Previous office submissions
+            </h2>
+          </div>
+          <p className="mt-1 text-sm text-slate-600">
+            Weekly amounts you marked as submitted.
+          </p>
+
+          <div className="mt-4 space-y-3">
+            {sortedSubmissions.map((submission) => (
+              <div
+                key={submission.id}
+                className="flex flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <div className="font-semibold text-slate-900">
+                    {submission.periodStart} – {submission.periodEnd}
+                  </div>
+                  <div className="mt-1 text-sm text-slate-500">
+                    {submission.submittedAt
+                      ? `Submitted ${new Date(
+                          submission.submittedAt
+                        ).toLocaleDateString("en-IN")}`
+                      : "Submission date not recorded"}
+                    {submission.note ? ` · ${submission.note}` : ""}
+                  </div>
+                </div>
+
+                <div className="text-lg font-bold text-slate-900">
+                  {money(submission.submittedAmount)}
+                </div>
+              </div>
+            ))}
+          </div>
         </section>
-      </div>
-    </>
+      )}
+    </div>
   );
 }
