@@ -9,6 +9,7 @@ import {
   ReceiptText,
   LogOut,
   Zap,
+  Wallet
 } from "lucide-react";
 
 import { useAuth } from "../features/auth/AuthProvider";
@@ -27,6 +28,7 @@ export default function AppShell({ children }) {
       Icon: ReceiptText,
     },
     { path: "/history", label: "Report history", Icon: CalendarDays },
+    {path:"/settlements",label:"Settlements",Icon:Wallet}
     
   ];
 
@@ -94,23 +96,6 @@ export default function AppShell({ children }) {
             ))}
           </nav>
 
-          {/* Sidebar note */}
-          <div className="mt-auto pt-8">
-            <div className="rounded-xl border border-[#2a4e53] bg-[#193a40] p-4">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-[#21464b]">
-                <Zap size={18} className="text-[#51d8c6]" />
-              </div>
-
-              <h2 className="text-sm font-bold text-white">
-                Keep it moving
-              </h2>
-
-              <p className="mt-2 text-[10px] leading-[1.7] text-[#a4bec0]">
-                Log field activity while it's fresh. Your report will be
-                ready to share.
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* Profile and logout */}
