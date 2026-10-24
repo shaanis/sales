@@ -1,11 +1,7 @@
-
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 const TA_RATE = 3;
-const MARGIN = 12;
-const MIN_TA_ROWS = 5;
-const MIN_EXPENSE_ROWS = 5;
 
 const localDate = (date = new Date()) => {
   const year = date.getFullYear();
@@ -26,39 +22,10 @@ const getWeekStart = (dateString) => {
 
 const getWeekEnd = (dateString) => {
   const date = new Date(`${getWeekStart(dateString)}T12:00:00`);
+
   date.setDate(date.getDate() + 6);
 
   return localDate(date);
-};
-
-const formatDate = (dateString) => {
-  if (!dateString) return "";
-
-  const parts = String(dateString).split("-");
-
-  return parts.length === 3
-    ? `${parts[2]}/${parts[1]}/${parts[0]}`
-    : dateString;
-};
-
-const money = (value) => Number(value || 0).toFixed(2);
-
-const getOrigin = (route) => {
-  if (!route) return "House";
-
-  const parts = String(route).trim().split(/\s+to\s+/i);
-
-  return parts.length > 1 ? parts[0].trim() : "House";
-};
-
-const getDestination = (route) => {
-  if (!route) return "";
-
-  const parts = String(route).trim().split(/\s+to\s+/i);
-
-  return parts.length > 1
-    ? parts.slice(1).join(" to ").trim()
-    : String(route).trim();
 };
 
 export function downloadWeeklyReportPDF({
@@ -67,19 +34,19 @@ export function downloadWeeklyReportPDF({
   user,
 }) {
   if (!selectedDate) {
-    console.error("Please select a date before downloading.");
+    console.error("Please select a date before downloading the PDF.");
     return;
   }
 
   const weekStart = getWeekStart(selectedDate);
   const weekEnd = getWeekEnd(selectedDate);
 
+  // Get all expense records for the selected Monday-Sunday week.
   const weeklyRecords = items
     .filter(
       (item) =>
         item.date &&
-        item.date >= weekStart &&
-        item.date <= weekEnd
+        getWeekStart(item.date) === weekStart
     )
     .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -91,17 +58,20 @@ export function downloadWeeklyReportPDF({
     (item) => item.type !== "TA"
   );
 
-  const totalTA = taRecords.reduce(
-    (sum, item) => sum + Number(item.km || 0) * TA_RATE,
+  // Calculate totals.
+  const totalTaAmount = taRecords.reduce(
+    (sum, item) =>
+      sum + Number(item.km || 0) * TA_RATE,
     0
   );
 
-  const totalOther = otherRecords.reduce(
-    (sum, item) => sum + Number(item.amount || 0),
+  const totalOtherAmount = otherRecords.reduce(
+    (sum, item) =>
+      sum + Number(item.amount || 0),
     0
   );
 
-  const grandTotal = totalTA + totalOther;
+  const grandTotal = totalTaAmount + totalOtherAmount;
 
   const doc = new jsPDF({
     orientation: "portrait",
@@ -109,106 +79,139 @@ export function downloadWeeklyReportPDF({
     format: "a4",
   });
 
+  const margin = 14;
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const contentWidth = pageWidth - MARGIN * 2;
+  const contentWidth = pageWidth - margin * 2;
 
-  const black = [0, 0, 0];
-  const headerGray = [245, 245, 245];
-
-  doc.setTextColor(...black);
-  doc.setDrawColor(...black);
-  doc.setLineWidth(0.25);
-
-  // ================================================
-  // 1. COMPANY HEADING
-  // ================================================
+  // --------------------------------------------------
+  // 1. Document title
+  // --------------------------------------------------
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(12);
 
   doc.text(
     "ECHONIX TECHNOLOGY PVT LTD",
     pageWidth / 2,
-    12,
+    10,
     { align: "center" }
   );
-
-  doc.setFontSize(9);
-
   doc.text(
     "DAILY REPORT",
     pageWidth / 2,
-    17,
+    18,
     { align: "center" }
   );
 
-  // ================================================
-  // 2. STAFF DETAILS
-  // ================================================
+  // --------------------------------------------------
+  // 2. Staff details
+  // --------------------------------------------------
+
+  const boxY = 26;
+  const boxHeight = 27;
+
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.3);
+
+  doc.rect(
+    margin,
+    boxY,
+    contentWidth,
+    boxHeight
+  );
+
+  doc.line(
+    margin,
+    boxY + 9,
+    margin + contentWidth,
+    boxY + 9
+  );
+
+  doc.line(
+    margin,
+    boxY + 18,
+    margin + contentWidth,
+    boxY + 18
+  );
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(0, 0, 0);
 
   const staffName =
     user?.displayName ||
     user?.email?.split("@")[0] ||
-    "";
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-
-  doc.text(`NAME: ${staffName}`, MARGIN, 25);
+    "________________";
 
   doc.text(
-    `FROM DATE: ${formatDate(weekStart)}`,
-    MARGIN,
-    31
+    `Name : ${staffName}`,
+    margin + 3,
+    boxY + 6.5
   );
 
   doc.text(
-    `TO DATE: ${formatDate(weekEnd)}`,
-    pageWidth / 2 - 5,
-    31
+    `From Date: ${weekStart}`,
+    margin + 3,
+    boxY + 15.5
   );
 
   doc.text(
-    `SUBMITTED DATE: ${formatDate(localDate())}`,
-    pageWidth - MARGIN,
-    25,
-    { align: "right" }
+    `To Date: ${weekEnd}`,
+    margin + contentWidth / 2,
+    boxY + 15.5
   );
 
-  // ================================================
-  // 3. TRAVEL ALLOWANCE TABLE
-  // ================================================
+  doc.text(
+    `Submit Date: ${localDate()}`,
+    margin + 3,
+    boxY + 24.5
+  );
+
+  // --------------------------------------------------
+  // 3. Travel allowance table
+  // From is always House.
+  // To is the destination from the route.
+  // --------------------------------------------------
 
   const taRows = taRecords.map((item) => {
     const km = Number(item.km || 0);
 
+    let destination = "-";
+
+    if (item.route) {
+      const routeParts = String(item.route).split(/\s+to\s+/i);
+
+      destination =
+        routeParts.length > 1
+          ? routeParts.slice(1).join(" to ").trim() || "-"
+          : String(item.route).trim() || "-";
+    }
+
     return [
-      formatDate(item.date),
-      getOrigin(item.route),
-      getDestination(item.route),
+      item.date,
+      "House",
+      destination,
       item.mode || "Bike",
       String(km),
       String(TA_RATE),
-      money(km * TA_RATE),
+      (km * TA_RATE).toFixed(2),
     ];
   });
 
-  // Compact blank rows to reduce unnecessary page height.
-  while (taRows.length < MIN_TA_ROWS) {
+  // Keep a minimum of four rows for printing.
+  while (taRows.length < 4) {
     taRows.push(["", "", "", "", "", "", ""]);
   }
 
   autoTable(doc, {
-    startY: 35,
+    startY: boxY + boxHeight + 6,
 
     margin: {
-      left: MARGIN,
-      right: MARGIN,
-      bottom: 10,
+      left: margin,
+      right: margin,
+      bottom: 20,
     },
-
-    tableWidth: contentWidth,
 
     head: [
       [
@@ -217,13 +220,14 @@ export function downloadWeeklyReportPDF({
           colSpan: 7,
           styles: {
             halign: "center",
+            fillColor: [240, 240, 240],
+            textColor: [0, 0, 0],
             fontStyle: "bold",
-            fillColor: headerGray,
           },
         },
       ],
       [
-        "DATE",
+        "Date",
         "TRAVEL FROM",
         "TRAVEL TO",
         "MODE OF TRAVEL",
@@ -238,7 +242,7 @@ export function downloadWeeklyReportPDF({
     foot: [
       [
         {
-          content: "SUB TOTAL",
+          content: "SUBTOTAL:",
           colSpan: 6,
           styles: {
             halign: "right",
@@ -246,7 +250,7 @@ export function downloadWeeklyReportPDF({
           },
         },
         {
-          content: money(totalTA),
+          content: `Rs. ${totalTaAmount.toFixed(2)}`,
           styles: {
             halign: "right",
             fontStyle: "bold",
@@ -257,125 +261,101 @@ export function downloadWeeklyReportPDF({
 
     theme: "grid",
 
-    styles: {
-      font: "helvetica",
-      fontSize: 7,
-      textColor: black,
-      lineColor: black,
-      lineWidth: 0.25,
-      cellPadding: 1.1,
-      minCellHeight: 5,
-      valign: "middle",
-      overflow: "linebreak",
-    },
-
     headStyles: {
-      fillColor: headerGray,
-      textColor: black,
-      lineColor: black,
-      lineWidth: 0.25,
-      halign: "center",
-      valign: "middle",
+      fillColor: [240, 240, 240],
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.2,
       fontStyle: "bold",
+      halign: "center",
     },
 
     footStyles: {
-      fillColor: [255, 255, 255],
-      textColor: black,
-      lineColor: black,
-      lineWidth: 0.25,
+      fillColor: [245, 245, 245],
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.2,
+    },
+
+    bodyStyles: {
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.2,
+      minCellHeight: 6.5,
+    },
+
+    styles: {
+      font: "helvetica",
+      fontSize: 8,
+      valign: "middle",
+      overflow: "linebreak",
+      cellPadding: 2,
     },
 
     columnStyles: {
-      0: { cellWidth: 20, halign: "center" },
-      1: { cellWidth: 32 },
-      2: { cellWidth: 35 },
-      3: { cellWidth: 25, halign: "center" },
-      4: { cellWidth: 24, halign: "center" },
-      5: { cellWidth: 22, halign: "center" },
-      6: { cellWidth: 28, halign: "right" },
+      0: {
+        halign: "center",
+        cellWidth: 24, // Date
+      },
+      1: {
+        halign: "left",
+        cellWidth: 30, // Travel From - increased
+      },
+      2: {
+        halign: "left",
+        cellWidth: 40, // Travel To - increased
+      },
+      3: {
+        halign: "center",
+        cellWidth: 25, // Mode of Travel - reduced
+      },
+      4: {
+        halign: "center",
+        cellWidth: 18, // Distance (KM) - reduced
+      },
+      5: {
+        halign: "center",
+        cellWidth: 17, // Per KM Rate - reduced
+      },
+      6: {
+        halign: "right",
+        cellWidth: 28, // Amount
+      },
     },
-
-    rowPageBreak: "avoid",
   });
 
-  // ================================================
-  // 4. EXPENSES: LEFT AND RIGHT COLUMNS
-  // ================================================
+  // --------------------------------------------------
+  // 4. Food and other expenses table
+  // Category column removed.
+  // Show description, or category when description is empty.
+  // --------------------------------------------------
 
-  // Fill the complete left column first.
-  // Only after 7 records, start filling the right column.
-  const LEFT_COLUMN_CAPACITY = 7;
+  const otherRows = otherRecords.map((item) => {
+    const description = String(item.note || "").trim();
+    const route = String(item.route || "").trim();
+    const type = String(item.type || "Other").trim();
 
-  const leftRecords = otherRecords.slice(
-    0,
-    LEFT_COLUMN_CAPACITY
-  );
+    const details = description || route || type;
 
-  const rightRecords = otherRecords.slice(
-    LEFT_COLUMN_CAPACITY
-  );
+    return [
+      item.date,
+      details,
+      Number(item.amount || 0).toFixed(2),
+    ];
+  });
 
-  // Keep the two sides aligned while avoiding
-  // unnecessary empty rows.
-  const rowCount = Math.max(
-    MIN_EXPENSE_ROWS,
-    leftRecords.length,
-    rightRecords.length
-  );
-
-  const expenseRows = [];
-
-  for (let i = 0; i < rowCount; i++) {
-    const left = leftRecords[i];
-    const right = rightRecords[i];
-
-    const leftDescription = left
-      ? String(left.note || "").trim() ||
-        String(left.route || "").trim() ||
-        String(left.type || "Other")
-      : "";
-
-    const rightDescription = right
-      ? String(right.note || "").trim() ||
-        String(right.route || "").trim() ||
-        String(right.type || "Other")
-      : "";
-
-    expenseRows.push([
-      left ? formatDate(left.date) : "",
-      leftDescription,
-      left ? money(left.amount) : "",
-
-      // Empty spacer column between the two tables.
-      "",
-
-      right ? formatDate(right.date) : "",
-      rightDescription,
-      right ? money(right.amount) : "",
-    ]);
+  while (otherRows.length < 4) {
+    otherRows.push(["", "", ""]);
   }
 
-  const leftTotal = leftRecords.reduce(
-    (sum, item) => sum + Number(item.amount || 0),
-    0
-  );
-
-  const rightTotal = rightRecords.reduce(
-    (sum, item) => sum + Number(item.amount || 0),
-    0
-  );
-
   autoTable(doc, {
-    startY: doc.lastAutoTable.finalY + 3,
+    startY: doc.lastAutoTable.finalY + 6,
 
     margin: {
-      left: MARGIN,
-      right: MARGIN,
-      bottom: 10,
+      left: margin,
+      right: margin,
+      bottom: 20,
     },
-
-    tableWidth: contentWidth,
 
     head: [
       [
@@ -384,44 +364,25 @@ export function downloadWeeklyReportPDF({
           colSpan: 3,
           styles: {
             halign: "center",
-            fillColor: headerGray,
-            fontStyle: "bold",
-          },
-        },
-        {
-          content: "",
-          styles: {
-            fillColor: [255, 255, 255],
-            lineWidth: 0,
-          },
-        },
-        {
-          content: "EXPENSES",
-          colSpan: 3,
-          styles: {
-            halign: "center",
-            fillColor: headerGray,
+            fillColor: [240, 240, 240],
+            textColor: [0, 0, 0],
             fontStyle: "bold",
           },
         },
       ],
       [
         "DATE",
-        "DESCRIPTION",
-        "AMOUNT",
-        "",
-        "DATE",
-        "DESCRIPTION",
+        "DESCRIPTION ",
         "AMOUNT",
       ],
     ],
 
-    body: expenseRows,
+    body: otherRows,
 
     foot: [
       [
         {
-          content: "SUBTOTAL",
+          content: "SUBTOTAL:",
           colSpan: 2,
           styles: {
             halign: "right",
@@ -429,31 +390,7 @@ export function downloadWeeklyReportPDF({
           },
         },
         {
-          content: money(leftTotal),
-          styles: {
-            halign: "right",
-            fontStyle: "bold",
-          },
-        },
-
-        // No border in the middle gap.
-        {
-          content: "",
-          styles: {
-            lineWidth: 0,
-          },
-        },
-
-        {
-          content: "SUBTOTAL",
-          colSpan: 2,
-          styles: {
-            halign: "right",
-            fontStyle: "bold",
-          },
-        },
-        {
-          content: money(rightTotal),
+          content: `Rs. ${totalOtherAmount.toFixed(2)}`,
           styles: {
             halign: "right",
             fontStyle: "bold",
@@ -464,147 +401,120 @@ export function downloadWeeklyReportPDF({
 
     theme: "grid",
 
-    styles: {
-      font: "helvetica",
-      fontSize: 7,
-      textColor: black,
-      lineColor: black,
-      lineWidth: 0.25,
-      cellPadding: 1.1,
-      minCellHeight: 5,
-      valign: "middle",
-      overflow: "linebreak",
-    },
-
     headStyles: {
-      fillColor: headerGray,
-      textColor: black,
-      lineColor: black,
-      lineWidth: 0.25,
-      halign: "center",
-      valign: "middle",
+      fillColor: [240, 240, 240],
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.2,
       fontStyle: "bold",
+      halign: "center",
     },
 
     footStyles: {
-      fillColor: [255, 255, 255],
-      textColor: black,
-      lineColor: black,
-      lineWidth: 0.25,
+      fillColor: [245, 245, 245],
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.2,
+    },
+
+    bodyStyles: {
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
+      lineWidth: 0.2,
+      minCellHeight: 6.5,
+    },
+
+    styles: {
+      font: "helvetica",
+      fontSize: 9,
+      valign: "middle",
+      overflow: "linebreak",
+      cellPadding: 2,
     },
 
     columnStyles: {
-      0: { cellWidth: 18, halign: "center" },
-      1: { cellWidth: 47 },
-      2: { cellWidth: 26, halign: "right" },
-
-      // Small gap between the left and right expense tables.
-      3: {
-        cellWidth: 4,
-        fillColor: [255, 255, 255],
-        lineWidth: 0,
+      0: {
+        halign: "center",
+        cellWidth: 28,
       },
-
-      4: { cellWidth: 18, halign: "center" },
-      5: { cellWidth: 47 },
-      6: { cellWidth: 26, halign: "right" },
+      1: {
+        cellWidth: "auto",
+      },
+      2: {
+        halign: "right",
+        cellWidth: 32,
+      },
     },
-
-    // Remove all borders from the spacer cells.
-    didParseCell(data) {
-      if (data.column.index === 3) {
-        data.cell.styles.lineWidth = 0;
-        data.cell.styles.fillColor = [255, 255, 255];
-        data.cell.styles.textColor = [255, 255, 255];
-      }
-    },
-
-    rowPageBreak: "avoid",
   });
 
-  // ================================================
-  // 5. TOTAL ROW
-  // ================================================
+  // --------------------------------------------------
+  // 5. Grand total summary
+  // --------------------------------------------------
 
-  let totalY = doc.lastAutoTable.finalY + 2;
+  let summaryY = doc.lastAutoTable.finalY + 5;
 
-  const totalHeight = 7;
-  const officeHeight = 23;
-  const bottomMargin = 8;
-
-  // Keep total and office section together.
-  if (
-    totalY + totalHeight + officeHeight >
-    pageHeight - bottomMargin
-  ) {
+  // Move summary to a new page if necessary.
+  if (summaryY + 8 > pageHeight - 25) {
     doc.addPage();
-    totalY = 12;
+    summaryY = 25;
   }
 
-  doc.setLineWidth(0.3);
+  doc.setDrawColor(0);
+  doc.setFillColor(240, 240, 240);
 
   doc.rect(
-    MARGIN,
-    totalY,
+    margin,
+    summaryY,
     contentWidth,
-    totalHeight
-  );
-
-  const labelStart = pageWidth - MARGIN - 65;
-
-  doc.line(
-    labelStart,
-    totalY,
-    labelStart,
-    totalY + totalHeight
+    8,
+    "FD"
   );
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(10);
+  doc.setTextColor(0, 0, 0);
 
   doc.text(
-    "TOTAL",
-    labelStart - 3,
-    totalY + 4.7,
-    { align: "right" }
+    "GRAND TOTAL AMOUNT:",
+    margin + 4,
+    summaryY + 5.5
   );
 
   doc.text(
-    money(grandTotal),
-    pageWidth - MARGIN - 3,
-    totalY + 4.7,
+    `Rs. ${grandTotal.toFixed(2)}`,
+    margin + contentWidth - 4,
+    summaryY + 5.5,
     { align: "right" }
   );
 
-  // ================================================
-  // 6. OFFICE USE SECTION
-  // ================================================
+  // --------------------------------------------------
+  // 6. Employee and approval signatures
+  // --------------------------------------------------
+  let signY = summaryY + 18;
 
-  const officeY = totalY + 12;
+  if (signY + 22 > pageHeight - 10) {
+    doc.addPage();
+    signY = 30;
+  }
+  
+  doc.setFontSize(9);
+  
+  const col1 = margin;
+  const col2 = margin + contentWidth / 3;
+  const col3 = margin + (contentWidth * 2) / 3;
+  
+  // All three headings in the same row
+  doc.text("VERIFIED BY", col1, signY);
+  doc.text("APPROVED BY", col2, signY);
+  doc.text("SETTLEMENT REMARKS", col3, signY);
+  
+  // Date labels below the first two headings
+  doc.text("Date:", col1, signY + 10);
+  doc.text("Date:", col2, signY + 10);
 
-  const col1 = MARGIN;
-  const col2 = MARGIN + contentWidth * 0.34;
-  const col3 = MARGIN + contentWidth * 0.64;
-
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(8);
-
-  doc.text("FOR OFFICE USE", col1, officeY);
-
-  doc.setFont("helvetica", "normal");
-
-  doc.text("VERIFIED BY", col1, officeY + 5);
-  doc.text("APPROVED BY", col2, officeY + 5);
-  doc.text("SETTLEMENT REMARKS", col3, officeY + 5);
-
-  doc.setFontSize(7.5);
-
-  doc.text("DATE: ______________", col1, officeY + 17);
-  doc.text("DATE: ______________", col2, officeY + 17);
-
-  // ================================================
-  // 7. DOWNLOAD
-  // ================================================
+  // --------------------------------------------------
+  // 7. Download PDF
+  // --------------------------------------------------
 
   doc.save(
     `Expense_Allowance_${weekStart}_to_${weekEnd}.pdf`
