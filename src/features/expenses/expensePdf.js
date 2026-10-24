@@ -4,6 +4,8 @@ import autoTable from "jspdf-autotable";
 
 const TA_RATE = 3;
 const MARGIN = 12;
+const MIN_TA_ROWS = 5;
+const MIN_EXPENSE_ROWS = 5;
 
 const localDate = (date = new Date()) => {
   const year = date.getFullYear();
@@ -118,9 +120,9 @@ export function downloadWeeklyReportPDF({
   doc.setDrawColor(...black);
   doc.setLineWidth(0.25);
 
-  // ==================================================
+  // ================================================
   // 1. COMPANY HEADING
-  // ==================================================
+  // ================================================
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
@@ -141,9 +143,9 @@ export function downloadWeeklyReportPDF({
     { align: "center" }
   );
 
-  // ==================================================
+  // ================================================
   // 2. STAFF DETAILS
-  // ==================================================
+  // ================================================
 
   const staffName =
     user?.displayName ||
@@ -174,9 +176,9 @@ export function downloadWeeklyReportPDF({
     { align: "right" }
   );
 
-  // ==================================================
-  // 3. FULL-WIDTH TRAVEL ALLOWANCE TABLE
-  // ==================================================
+  // ================================================
+  // 3. TRAVEL ALLOWANCE TABLE
+  // ================================================
 
   const taRows = taRecords.map((item) => {
     const km = Number(item.km || 0);
@@ -192,8 +194,8 @@ export function downloadWeeklyReportPDF({
     ];
   });
 
-  // Blank rows for handwritten entries.
-  while (taRows.length < 7) {
+  // Compact blank rows to reduce unnecessary page height.
+  while (taRows.length < MIN_TA_ROWS) {
     taRows.push(["", "", "", "", "", "", ""]);
   }
 
@@ -261,8 +263,8 @@ export function downloadWeeklyReportPDF({
       textColor: black,
       lineColor: black,
       lineWidth: 0.25,
-      cellPadding: 1.3,
-      minCellHeight: 6,
+      cellPadding: 1.1,
+      minCellHeight: 5,
       valign: "middle",
       overflow: "linebreak",
     },
@@ -297,20 +299,27 @@ export function downloadWeeklyReportPDF({
     rowPageBreak: "avoid",
   });
 
-  // ==================================================
-  // 4. TWO EXPENSE SECTIONS IN ONE ALIGNED TABLE
-  // ==================================================
+  // ================================================
+  // 4. EXPENSES: LEFT AND RIGHT COLUMNS
+  // ================================================
 
-  // Using one table guarantees that the horizontal
-  // borders of both expense sections align exactly.
+  // Fill the complete left column first.
+  // Only after 7 records, start filling the right column.
+  const LEFT_COLUMN_CAPACITY = 7;
 
-  const splitIndex = Math.ceil(otherRecords.length / 2);
+  const leftRecords = otherRecords.slice(
+    0,
+    LEFT_COLUMN_CAPACITY
+  );
 
-  const leftRecords = otherRecords.slice(0, splitIndex);
-  const rightRecords = otherRecords.slice(splitIndex);
+  const rightRecords = otherRecords.slice(
+    LEFT_COLUMN_CAPACITY
+  );
 
+  // Keep the two sides aligned while avoiding
+  // unnecessary empty rows.
   const rowCount = Math.max(
-    7,
+    MIN_EXPENSE_ROWS,
     leftRecords.length,
     rightRecords.length
   );
@@ -337,6 +346,10 @@ export function downloadWeeklyReportPDF({
       left ? formatDate(left.date) : "",
       leftDescription,
       left ? money(left.amount) : "",
+
+      // Empty spacer column between the two tables.
+      "",
+
       right ? formatDate(right.date) : "",
       rightDescription,
       right ? money(right.amount) : "",
@@ -376,6 +389,13 @@ export function downloadWeeklyReportPDF({
           },
         },
         {
+          content: "",
+          styles: {
+            fillColor: [255, 255, 255],
+            lineWidth: 0,
+          },
+        },
+        {
           content: "EXPENSES",
           colSpan: 3,
           styles: {
@@ -389,6 +409,7 @@ export function downloadWeeklyReportPDF({
         "DATE",
         "DESCRIPTION",
         "AMOUNT",
+        "",
         "DATE",
         "DESCRIPTION",
         "AMOUNT",
@@ -414,6 +435,15 @@ export function downloadWeeklyReportPDF({
             fontStyle: "bold",
           },
         },
+
+        // No border in the middle gap.
+        {
+          content: "",
+          styles: {
+            lineWidth: 0,
+          },
+        },
+
         {
           content: "SUBTOTAL",
           colSpan: 2,
@@ -440,8 +470,8 @@ export function downloadWeeklyReportPDF({
       textColor: black,
       lineColor: black,
       lineWidth: 0.25,
-      cellPadding: 1.3,
-      minCellHeight: 6,
+      cellPadding: 1.1,
+      minCellHeight: 5,
       valign: "middle",
       overflow: "linebreak",
     },
@@ -464,30 +494,51 @@ export function downloadWeeklyReportPDF({
     },
 
     columnStyles: {
-      0: { cellWidth: 20, halign: "center" },
-      1: { cellWidth: 40 },
-      2: { cellWidth: 33, halign: "right" },
-      3: { cellWidth: 20, halign: "center" },
-      4: { cellWidth: 40 },
-      5: { cellWidth: 33, halign: "right" },
+      0: { cellWidth: 18, halign: "center" },
+      1: { cellWidth: 47 },
+      2: { cellWidth: 26, halign: "right" },
+
+      // Small gap between the left and right expense tables.
+      3: {
+        cellWidth: 4,
+        fillColor: [255, 255, 255],
+        lineWidth: 0,
+      },
+
+      4: { cellWidth: 18, halign: "center" },
+      5: { cellWidth: 47 },
+      6: { cellWidth: 26, halign: "right" },
+    },
+
+    // Remove all borders from the spacer cells.
+    didParseCell(data) {
+      if (data.column.index === 3) {
+        data.cell.styles.lineWidth = 0;
+        data.cell.styles.fillColor = [255, 255, 255];
+        data.cell.styles.textColor = [255, 255, 255];
+      }
     },
 
     rowPageBreak: "avoid",
   });
 
-  // ==================================================
-  // 5. FULL-WIDTH TOTAL ROW
-  // ==================================================
+  // ================================================
+  // 5. TOTAL ROW
+  // ================================================
 
   let totalY = doc.lastAutoTable.finalY + 2;
 
-  const totalHeight = 8;
-  const officeHeight = 31;
+  const totalHeight = 7;
+  const officeHeight = 23;
+  const bottomMargin = 8;
 
-  // Keep the total and approval section together.
-  if (totalY + totalHeight + officeHeight > pageHeight - 7) {
+  // Keep total and office section together.
+  if (
+    totalY + totalHeight + officeHeight >
+    pageHeight - bottomMargin
+  ) {
     doc.addPage();
-    totalY = 15;
+    totalY = 12;
   }
 
   doc.setLineWidth(0.3);
@@ -499,8 +550,6 @@ export function downloadWeeklyReportPDF({
     totalHeight
   );
 
-  // Match the right-side total cell in the reference.
-  const amountCellWidth = 27;
   const labelStart = pageWidth - MARGIN - 65;
 
   doc.line(
@@ -516,22 +565,22 @@ export function downloadWeeklyReportPDF({
   doc.text(
     "TOTAL",
     labelStart - 3,
-    totalY + 5.2,
+    totalY + 4.7,
     { align: "right" }
   );
 
   doc.text(
     money(grandTotal),
     pageWidth - MARGIN - 3,
-    totalY + 5.2,
+    totalY + 4.7,
     { align: "right" }
   );
 
-  // ==================================================
-  // 6. OFFICE VERIFICATION / APPROVAL SECTION
-  // ==================================================
+  // ================================================
+  // 6. OFFICE USE SECTION
+  // ================================================
 
-  const officeY = totalY + 14;
+  const officeY = totalY + 12;
 
   const col1 = MARGIN;
   const col2 = MARGIN + contentWidth * 0.34;
@@ -544,18 +593,18 @@ export function downloadWeeklyReportPDF({
 
   doc.setFont("helvetica", "normal");
 
-  doc.text("VERIFIED BY", col1, officeY + 6);
-  doc.text("APPROVED BY", col2, officeY + 6);
-  doc.text("SETTLEMENT REMARKS", col3, officeY + 6);
+  doc.text("VERIFIED BY", col1, officeY + 5);
+  doc.text("APPROVED BY", col2, officeY + 5);
+  doc.text("SETTLEMENT REMARKS", col3, officeY + 5);
 
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
 
-  doc.text("DATE: __________________", col1, officeY + 19);
-  doc.text("DATE: __________________", col2, officeY + 19);
+  doc.text("DATE: ______________", col1, officeY + 17);
+  doc.text("DATE: ______________", col2, officeY + 17);
 
-  // ==================================================
+  // ================================================
   // 7. DOWNLOAD
-  // ==================================================
+  // ================================================
 
   doc.save(
     `Expense_Allowance_${weekStart}_to_${weekEnd}.pdf`
