@@ -19,6 +19,14 @@ const getWeekStart = (dateString) => {
 
   return localDate(date);
 };
+const formatDate = (dateString) => {
+  const date = new Date(`${dateString}T12:00:00`);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+
+  return `${day}-${month}-${year}`;
+};
 
 const getWeekEnd = (dateString) => {
   const date = new Date(`${getWeekStart(dateString)}T12:00:00`);
@@ -104,9 +112,6 @@ export function downloadWeeklyReportPDF({
     { align: "center" }
   );
 
-  // --------------------------------------------------
-  // 2. Staff details
-  // --------------------------------------------------
 
   
   // --------------------------------------------------
@@ -155,19 +160,19 @@ export function downloadWeeklyReportPDF({
   const datesY = boxY + 13;
 
   doc.text(
-    `FROM DATE: ${weekStart}`,
+    `FROM DATE: ${formatDate(weekStart)}`,
     margin + 3,
     datesY
   );
 
   doc.text(
-    `TO DATE: ${weekEnd}`,
+    `TO DATE: ${formatDate(weekEnd)}`,
     margin + 67,
     datesY
   );
 
   doc.text(
-    `SUBMITTED DATE: ${localDate()}`,
+    `SUBMITTED DATE: ${formatDate(localDate())}`,
     margin + 125,
     datesY
   );
@@ -194,7 +199,7 @@ export function downloadWeeklyReportPDF({
     }
 
     return [
-      item.date,
+      formatDate(item.date),
       "House",
       destination,
       item.mode || "Bike",
@@ -343,7 +348,7 @@ export function downloadWeeklyReportPDF({
     const details = description || route || type;
 
     return [
-      item.date,
+     formatDate(item.date),
       details,
       Number(item.amount || 0).toFixed(2),
     ];
