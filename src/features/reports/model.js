@@ -111,8 +111,7 @@ export function formatReport(report, expenses = []) {
 • DOCUMENTS COLLECTED: ${value(report.documentsCollected)}
 • DEALER/B2B VISITS: ${value(report.dealerVisits)}
 • PAYMENT COLLECTED: ${value(report.paymentCollected)}
-
-
+---------------------------------------------------------
 🚀 *MTD UPDATE*
 • TOTAL PO COUNT: ${value(report.totalPoCount)}
 • MTD PO COUNT: ${value(report.mtdPoCount)}
@@ -123,7 +122,7 @@ export function formatReport(report, expenses = []) {
 • DOCUMENTS IN BANK: ${value(report.docsBank)}
 • COLLECTION PENDING: ${value(report.collectionPending)}
 • DEALER / B2B VISITS: ${value(report.mtdDealerVisits)}
-
+---------------------------------------------------------
 🎯 *TOMORROW'S TOP 3 FOCUS*
 1. ${value(report.focus1)}
 2. ${value(report.focus2)}

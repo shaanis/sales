@@ -299,15 +299,15 @@ export function downloadWeeklyReportPDF({
       },
       1: {
         halign: "left",
-        cellWidth: 30, // Travel From - increased
+        cellWidth: 25, // Travel From - increased
       },
       2: {
         halign: "left",
-        cellWidth: 40, // Travel To - increased
+        cellWidth: 45, // Travel To - increased
       },
       3: {
         halign: "center",
-        cellWidth: 25, // Mode of Travel - reduced
+        cellWidth: 20, // Mode of Travel - reduced
       },
       4: {
         halign: "center",
