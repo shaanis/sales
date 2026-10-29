@@ -108,35 +108,35 @@ export function downloadWeeklyReportPDF({
   // 2. Staff details
   // --------------------------------------------------
 
+  
+  // --------------------------------------------------
+  // 2. Staff details
+  // --------------------------------------------------
+
   const boxY = 26;
-  const boxHeight = 27;
+  const boxHeight = 18;
 
   doc.setDrawColor(0);
   doc.setLineWidth(0.3);
 
-  doc.rect(
-    margin,
-    boxY,
-    contentWidth,
-    boxHeight
-  );
+  // Outer box
+  // doc.rect(
+  //   margin,
+  //   boxY,
+  //   contentWidth,
+  //   boxHeight
+  // );
 
-  doc.line(
-    margin,
-    boxY + 9,
-    margin + contentWidth,
-    boxY + 9
-  );
-
-  doc.line(
-    margin,
-    boxY + 18,
-    margin + contentWidth,
-    boxY + 18
-  );
+  // Divider between Name and Dates
+  // doc.line(
+  //   margin,
+  //   boxY + 7,
+  //   margin + contentWidth,
+  //   boxY + 7
+  // );
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(8);
   doc.setTextColor(0, 0, 0);
 
   const staffName =
@@ -144,29 +144,34 @@ export function downloadWeeklyReportPDF({
     user?.email?.split("@")[0] ||
     "________________";
 
+  // First row: Name
   doc.text(
-    `Name : ${staffName}`,
+    `NAME: ${staffName}`,
     margin + 3,
-    boxY + 6.5
+    boxY + 4.8
+  );
+
+  // Second row: All dates horizontally aligned
+  const datesY = boxY + 13;
+
+  doc.text(
+    `FROM DATE: ${weekStart}`,
+    margin + 3,
+    datesY
   );
 
   doc.text(
-    `From Date: ${weekStart}`,
-    margin + 3,
-    boxY + 15.5
+    `TO DATE: ${weekEnd}`,
+    margin + 67,
+    datesY
   );
 
   doc.text(
-    `To Date: ${weekEnd}`,
-    margin + contentWidth / 2,
-    boxY + 15.5
+    `SUBMITTED DATE: ${localDate()}`,
+    margin + 125,
+    datesY
   );
 
-  doc.text(
-    `Submit Date: ${localDate()}`,
-    margin + 3,
-    boxY + 24.5
-  );
 
   // --------------------------------------------------
   // 3. Travel allowance table
@@ -303,7 +308,7 @@ export function downloadWeeklyReportPDF({
       },
       2: {
         halign: "left",
-        cellWidth: 45, // Travel To - increased
+        cellWidth: 50, // Travel To - increased
       },
       3: {
         halign: "center",
