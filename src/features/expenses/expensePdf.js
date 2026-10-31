@@ -1,26 +1,14 @@
+
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 const TA_RATE = 3;
 
-const localDate = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-};
-
-const getWeekStart = (dateString) => {
-  const date = new Date(`${dateString}T12:00:00`);
-  const day = date.getDay();
-
-  date.setDate(date.getDate() - (day === 0 ? 6 : day - 1));
-
-  return localDate(date);
-};
 const formatDate = (dateString) => {
+  if (!dateString) return "-";
+
   const date = new Date(`${dateString}T12:00:00`);
+
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = date.getFullYear();
@@ -28,54 +16,66 @@ const formatDate = (dateString) => {
   return `${day}-${month}-${year}`;
 };
 
-const getWeekEnd = (dateString) => {
-  const date = new Date(`${getWeekStart(dateString)}T12:00:00`);
+const formatSubmittedDate = (dateString) => {
+  if (!dateString) return "-";
 
-  date.setDate(date.getDate() + 6);
+  const date = new Date(dateString);
 
-  return localDate(date);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+
+  return `${day}-${month}-${year}`;
 };
 
-export function downloadWeeklyReportPDF({
-  items = [],
-  selectedDate,
-  user,
-}) {
-  if (!selectedDate) {
-    console.error("Please select a date before downloading the PDF.");
-    return;
+const getAmount = (item) =>
+  item.type === "TA"
+    ? Number(item.km || 0) * TA_RATE
+    : Number(item.amount || 0);
+
+const getFileName = (submission, submittedDate) => {
+  const submissionId =
+    submission.id ||
+    submittedDate ||
+    Date.now();
+
+  const safeId = String(submissionId).replace(
+    /[^a-zA-Z0-9_-]/g,
+    "_"
+  );
+
+  return `Expense_Submission_${formatSubmittedDate(
+    submittedDate
+  ).replace(/-/g, "")}_${safeId}.pdf`;
+};
+
+// Shared PDF generator.
+// Preview and Download both use this exact same function.
+function createSubmissionPDF({ submission, user }) {
+  if (!submission || !Array.isArray(submission.expenses)) {
+    console.error("Submission snapshot not found.");
+    return null;
   }
 
-  const weekStart = getWeekStart(selectedDate);
-  const weekEnd = getWeekEnd(selectedDate);
+  const records = [...submission.expenses].sort((a, b) =>
+    String(a.date || "").localeCompare(String(b.date || ""))
+  );
 
-  // Get all expense records for the selected Monday-Sunday week.
-  const weeklyRecords = items
-    .filter(
-      (item) =>
-        item.date &&
-        getWeekStart(item.date) === weekStart
-    )
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  const taRecords = weeklyRecords.filter(
+  const taRecords = records.filter(
     (item) => item.type === "TA"
   );
 
-  const otherRecords = weeklyRecords.filter(
+  const otherRecords = records.filter(
     (item) => item.type !== "TA"
   );
 
-  // Calculate totals.
   const totalTaAmount = taRecords.reduce(
-    (sum, item) =>
-      sum + Number(item.km || 0) * TA_RATE,
+    (sum, item) => sum + getAmount(item),
     0
   );
 
   const totalOtherAmount = otherRecords.reduce(
-    (sum, item) =>
-      sum + Number(item.amount || 0),
+    (sum, item) => sum + getAmount(item),
     0
   );
 
@@ -92,9 +92,19 @@ export function downloadWeeklyReportPDF({
   const pageHeight = doc.internal.pageSize.getHeight();
   const contentWidth = pageWidth - margin * 2;
 
-  // --------------------------------------------------
+  const dates = records
+    .map((item) => item.date)
+    .filter(Boolean)
+    .sort();
+
+  const fromDate = dates.length ? dates[0] : null;
+  const toDate = dates.length ? dates[dates.length - 1] : null;
+
+  const submittedDate = submission.submittedAt
+    ? submission.submittedAt.slice(0, 10)
+    : null;
+
   // 1. Document title
-  // --------------------------------------------------
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
@@ -105,6 +115,7 @@ export function downloadWeeklyReportPDF({
     10,
     { align: "center" }
   );
+
   doc.text(
     "DAILY REPORT",
     pageWidth / 2,
@@ -112,33 +123,9 @@ export function downloadWeeklyReportPDF({
     { align: "center" }
   );
 
-
-  
-  // --------------------------------------------------
   // 2. Staff details
-  // --------------------------------------------------
 
   const boxY = 26;
-  const boxHeight = 18;
-
-  doc.setDrawColor(0);
-  doc.setLineWidth(0.3);
-
-  // Outer box
-  // doc.rect(
-  //   margin,
-  //   boxY,
-  //   contentWidth,
-  //   boxHeight
-  // );
-
-  // Divider between Name and Dates
-  // doc.line(
-  //   margin,
-  //   boxY + 7,
-  //   margin + contentWidth,
-  //   boxY + 7
-  // );
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
@@ -149,40 +136,33 @@ export function downloadWeeklyReportPDF({
     user?.email?.split("@")[0] ||
     "________________";
 
-  // First row: Name
   doc.text(
     `NAME: ${staffName}`,
     margin + 3,
     boxY + 4.8
   );
 
-  // Second row: All dates horizontally aligned
   const datesY = boxY + 13;
 
   doc.text(
-    `FROM DATE: ${formatDate(weekStart)}`,
+    `FROM DATE: ${fromDate ? formatDate(fromDate) : "-"}`,
     margin + 3,
     datesY
   );
 
   doc.text(
-    `TO DATE: ${formatDate(weekEnd)}`,
+    `TO DATE: ${toDate ? formatDate(toDate) : "-"}`,
     margin + 67,
     datesY
   );
 
   doc.text(
-    `SUBMITTED DATE: ${formatDate(localDate())}`,
+    `SUBMITTED DATE: ${formatSubmittedDate(submittedDate)}`,
     margin + 125,
     datesY
   );
 
-
-  // --------------------------------------------------
   // 3. Travel allowance table
-  // From is always House.
-  // To is the destination from the route.
-  // --------------------------------------------------
 
   const taRows = taRecords.map((item) => {
     const km = Number(item.km || 0);
@@ -209,13 +189,12 @@ export function downloadWeeklyReportPDF({
     ];
   });
 
-  // Keep a minimum of four rows for printing.
   while (taRows.length < 4) {
     taRows.push(["", "", "", "", "", "", ""]);
   }
 
   autoTable(doc, {
-    startY: boxY + boxHeight + 6,
+    startY: boxY + 24,
 
     margin: {
       left: margin,
@@ -305,40 +284,36 @@ export function downloadWeeklyReportPDF({
     columnStyles: {
       0: {
         halign: "center",
-        cellWidth: 24, // Date
+        cellWidth: 24,
       },
       1: {
         halign: "left",
-        cellWidth: 25, // Travel From - increased
+        cellWidth: 25,
       },
       2: {
         halign: "left",
-        cellWidth: 50, // Travel To - increased
+        cellWidth: 50,
       },
       3: {
         halign: "center",
-        cellWidth: 20, // Mode of Travel - reduced
+        cellWidth: 20,
       },
       4: {
         halign: "center",
-        cellWidth: 18, // Distance (KM) - reduced
+        cellWidth: 18,
       },
       5: {
         halign: "center",
-        cellWidth: 17, // Per KM Rate - reduced
+        cellWidth: 17,
       },
       6: {
         halign: "right",
-        cellWidth: 28, // Amount
+        cellWidth: 28,
       },
     },
   });
 
-  // --------------------------------------------------
   // 4. Food and other expenses table
-  // Category column removed.
-  // Show description, or category when description is empty.
-  // --------------------------------------------------
 
   const otherRows = otherRecords.map((item) => {
     const description = String(item.note || "").trim();
@@ -348,7 +323,7 @@ export function downloadWeeklyReportPDF({
     const details = description || route || type;
 
     return [
-     formatDate(item.date),
+      formatDate(item.date),
       details,
       Number(item.amount || 0).toFixed(2),
     ];
@@ -382,7 +357,7 @@ export function downloadWeeklyReportPDF({
       ],
       [
         "DATE",
-        "DESCRIPTION ",
+        "DESCRIPTION",
         "AMOUNT",
       ],
     ],
@@ -457,13 +432,10 @@ export function downloadWeeklyReportPDF({
     },
   });
 
-  // --------------------------------------------------
   // 5. Grand total summary
-  // --------------------------------------------------
 
   let summaryY = doc.lastAutoTable.finalY + 5;
 
-  // Move summary to a new page if necessary.
   if (summaryY + 8 > pageHeight - 25) {
     doc.addPage();
     summaryY = 25;
@@ -497,36 +469,64 @@ export function downloadWeeklyReportPDF({
     { align: "right" }
   );
 
-  // --------------------------------------------------
   // 6. Employee and approval signatures
-  // --------------------------------------------------
+
   let signY = summaryY + 18;
 
   if (signY + 22 > pageHeight - 10) {
     doc.addPage();
     signY = 30;
   }
-  
+
   doc.setFontSize(9);
-  
+
   const col1 = margin;
   const col2 = margin + contentWidth / 3;
   const col3 = margin + (contentWidth * 2) / 3;
-  
-  // All three headings in the same row
+
   doc.text("VERIFIED BY", col1, signY);
   doc.text("APPROVED BY", col2, signY);
   doc.text("SETTLEMENT REMARKS", col3, signY);
-  
-  // Date labels below the first two headings
+
   doc.text("Date:", col1, signY + 10);
   doc.text("Date:", col2, signY + 10);
 
-  // --------------------------------------------------
-  // 7. Download PDF
-  // --------------------------------------------------
+  return {
+    doc,
+    fileName: getFileName(submission, submittedDate),
+  };
+}
 
-  doc.save(
-    `Expense_Allowance_${weekStart}_to_${weekEnd}.pdf`
-  );
+// 7. Preview PDF in a new browser tab
+
+export function previewSubmissionPDF({ submission, user }) {
+  const result = createSubmissionPDF({ submission, user });
+
+  if (!result) return;
+
+  const blob = result.doc.output("blob");
+  const blobUrl = URL.createObjectURL(blob);
+
+  const previewWindow = window.open(blobUrl, "_blank");
+
+  if (!previewWindow) {
+    URL.revokeObjectURL(blobUrl);
+    alert("Please allow pop-ups to preview the PDF.");
+    return;
+  }
+
+  // Release the temporary URL after the PDF has had time to load.
+  setTimeout(() => {
+    URL.revokeObjectURL(blobUrl);
+  }, 10 * 60 * 1000);
+}
+
+// 8. Download PDF
+
+export function downloadSubmissionPDF({ submission, user }) {
+  const result = createSubmissionPDF({ submission, user });
+
+  if (!result) return;
+
+  result.doc.save(result.fileName);
 }

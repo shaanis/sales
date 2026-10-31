@@ -1,14 +1,23 @@
-
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, CalendarDays, ReceiptText, CheckCircle2 } from "lucide-react";
+import {
+  Plus,
+  CalendarDays,
+  CheckCircle2,
+  Download,
+  Eye,
+} from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
 import {
   addRecord,
   listRecords,
-  updateRecord,
 } from "../../lib/data";
 import { Field, Input } from "../../components/Field";
+
+import {
+  downloadSubmissionPDF,
+  previewSubmissionPDF,
+} from "../expenses/expensePdf";
 
 const TA_RATE = 3;
 
@@ -39,28 +48,14 @@ const getAmount = (item) =>
     ? Number(item.km || 0) * TA_RATE
     : Number(item.amount || 0);
 
-const getWeekStart = (dateString) => {
-  const date = new Date(`${dateString}T12:00:00`);
-  const day = date.getDay();
-
-  date.setDate(date.getDate() - (day === 0 ? 6 : day - 1));
-
-  return localDate(date);
-};
-
-const getWeekEnd = (dateString) => {
-  const date = new Date(`${getWeekStart(dateString)}T12:00:00`);
-  date.setDate(date.getDate() + 6);
-  return localDate(date);
-};
-
 const formatDate = (dateString) =>
-  new Date(`${dateString}T12:00:00`).toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  dateString
+    ? new Date(`${dateString}T12:00:00`).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : "-";
 
 export default function ExpensesPage() {
   const { user } = useAuth();
@@ -71,11 +66,12 @@ export default function ExpensesPage() {
 
   const [items, setItems] = useState([]);
   const [officeSubmissions, setOfficeSubmissions] = useState([]);
+
   const [submissionNote, setSubmissionNote] = useState("");
   const [submissionBusy, setSubmissionBusy] = useState(false);
 
-  const currentWeekStart = getWeekStart(localDate());
-  const currentWeekEnd = getWeekEnd(localDate());
+  // Stores the exact expense snapshot shown in PDF preview.
+  const [previewedSubmission, setPreviewedSubmission] = useState(null);
 
   async function refresh() {
     if (!user?.uid) {
@@ -92,14 +88,6 @@ export default function ExpensesPage() {
 
       setItems(expenses || []);
       setOfficeSubmissions(submissions || []);
-
-      const savedSubmission = (submissions || []).find(
-        (item) =>
-          item.periodStart === currentWeekStart &&
-          item.periodEnd === currentWeekEnd
-      );
-
-      setSubmissionNote(savedSubmission?.note || "");
     } catch (error) {
       console.error("Could not load expense data:", error);
       setNote("Could not load entries. Please check your connection.");
@@ -110,11 +98,6 @@ export default function ExpensesPage() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
-
-  const calculatedAmount =
-    form.type === "TA"
-      ? Number(form.km || 0) * TA_RATE
-      : Number(form.amount || 0);
 
   function updateForm(key, value) {
     setForm((previous) => {
@@ -132,6 +115,11 @@ export default function ExpensesPage() {
       return next;
     });
   }
+
+  const calculatedAmount =
+    form.type === "TA"
+      ? Number(form.km || 0) * TA_RATE
+      : Number(form.amount || 0);
 
   async function submit(event) {
     event.preventDefault();
@@ -163,10 +151,12 @@ export default function ExpensesPage() {
         ...form,
         km: form.type === "TA" ? km : 0,
         amount,
+        createdAt: new Date().toISOString(),
       });
 
       setForm(freshEntry());
       await refresh();
+
       setNote("Expense entry saved successfully.");
     } catch (error) {
       console.error("Expense save failed:", error);
@@ -176,47 +166,141 @@ export default function ExpensesPage() {
     }
   }
 
-  const currentWeekExpenses = useMemo(
-    () =>
-      items.filter(
-        (item) =>
-          item.date >= currentWeekStart &&
-          item.date <= currentWeekEnd
-      ),
-    [items, currentWeekStart, currentWeekEnd]
-  );
+  // Collect every expense ID already included in an earlier submission.
+  const submittedExpenseIds = useMemo(() => {
+    const ids = new Set();
 
-  const currentWeekTotal = currentWeekExpenses.reduce(
+    officeSubmissions.forEach((submission) => {
+      (submission.expenseIds || []).forEach((id) => {
+        ids.add(String(id));
+      });
+
+      (submission.expenses || []).forEach((expense) => {
+        if (expense.id) {
+          ids.add(String(expense.id));
+        }
+      });
+    });
+
+    return ids;
+  }, [officeSubmissions]);
+
+  // Only expenses not included in previous submissions.
+  const pendingExpenses = useMemo(() => {
+    return items
+      .filter(
+        (item) =>
+          item.id &&
+          !submittedExpenseIds.has(String(item.id))
+      )
+      .sort((a, b) =>
+        String(a.date || "").localeCompare(String(b.date || ""))
+      );
+  }, [items, submittedExpenseIds]);
+
+  const pendingTotal = pendingExpenses.reduce(
     (sum, item) => sum + getAmount(item),
     0
   );
 
-  const currentSubmission = officeSubmissions.find(
-    (item) =>
-      item.periodStart === currentWeekStart &&
-      item.periodEnd === currentWeekEnd
+  const pendingStartDate = pendingExpenses.length
+    ? pendingExpenses[0].date
+    : null;
+
+  const pendingEndDate = pendingExpenses.length
+    ? pendingExpenses[pendingExpenses.length - 1].date
+    : null;
+
+  const sortedSubmissions = useMemo(
+    () =>
+      [...officeSubmissions].sort((a, b) =>
+        String(b.submittedAt || "").localeCompare(
+          String(a.submittedAt || "")
+        )
+      ),
+    [officeSubmissions]
   );
 
-  const sortedSubmissions = [...officeSubmissions].sort((a, b) =>
-    String(b.periodStart || "").localeCompare(
-      String(a.periodStart || "")
-    )
-  );
+  // Create a snapshot that will be used by BOTH preview and submission.
+  function createSubmissionSnapshot(expenses) {
+    const expenseSnapshot = expenses.map((item) => ({
+      ...item,
+    }));
 
+    const dates = expenseSnapshot
+      .map((item) => item.date)
+      .filter(Boolean)
+      .sort();
+
+    const now = new Date().toISOString();
+
+    return {
+      submitted: true,
+      submittedAt: now,
+
+      expenses: expenseSnapshot,
+
+      expenseIds: expenseSnapshot.map((item) =>
+        String(item.id)
+      ),
+
+      submittedAmount: expenseSnapshot.reduce(
+        (sum, item) => sum + getAmount(item),
+        0
+      ),
+
+      expenseCount: expenseSnapshot.length,
+
+      periodStart: dates.length ? dates[0] : null,
+      periodEnd: dates.length ? dates[dates.length - 1] : null,
+
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  // Preview the actual PDF using the same PDF generator as Download.
+  function handlePreviewPDF() {
+    if (!user?.uid) {
+      setNote("Please log in first.");
+      return;
+    }
+
+    if (pendingExpenses.length === 0) {
+      setNote("There are no new expenses to preview.");
+      return;
+    }
+
+    const snapshot = createSubmissionSnapshot(pendingExpenses);
+
+    // Save the exact snapshot currently being previewed.
+    setPreviewedSubmission(snapshot);
+
+    setNote("");
+
+    previewSubmissionPDF({
+      submission: snapshot,
+      user,
+    });
+  }
+
+  // Submit the exact snapshot that was previewed.
   async function markOfficeSubmitted() {
     if (!user?.uid) {
       setNote("Please log in first.");
       return;
     }
 
-    if (currentWeekExpenses.length === 0) {
-      setNote("There are no expenses for the current week.");
+    if (!previewedSubmission?.expenses?.length) {
+      setNote("Please preview the PDF before submitting.");
       return;
     }
 
-    const confirmMessage = currentSubmission
-      ? "Update this week's office submission record?"
-      : `Mark ${money(currentWeekTotal)} as submitted to the office?`;
+    const snapshot = previewedSubmission;
+
+    const confirmMessage =
+      `Submit ${snapshot.expenseCount} previewed expense entries ` +
+      `amounting to ${money(snapshot.submittedAmount)} to the office?`;
 
     if (!window.confirm(confirmMessage)) return;
 
@@ -227,35 +311,29 @@ export default function ExpensesPage() {
       const now = new Date().toISOString();
 
       const submissionData = {
+        ...snapshot,
         ownerUid: user.uid,
-        periodStart: currentWeekStart,
-        periodEnd: currentWeekEnd,
-        submittedAmount: currentWeekTotal,
-        submitted: true,
-        submittedAt: currentSubmission?.submittedAt || now,
         note: submissionNote.trim(),
         updatedAt: now,
       };
 
-      if (currentSubmission?.id) {
-        await updateRecord(
-          user.uid,
-          "officeSubmissions",
-          currentSubmission.id,
-          submissionData
-        );
-      } else {
-        await addRecord(
-          user.uid,
-          "officeSubmissions",
-          submissionData
-        );
-      }
+      await addRecord(
+        user.uid,
+        "officeSubmissions",
+        submissionData
+      );
+
+      setSubmissionNote("");
+      setPreviewedSubmission(null);
 
       await refresh();
-      setNote("Office submission record saved successfully.");
+
+      setNote(
+        "Submission saved successfully. The previewed expenses have been moved to submission history."
+      );
     } catch (error) {
       console.error("Submission save failed:", error);
+
       setNote(
         `Could not save submission: ${error.code || error.message}`
       );
@@ -264,8 +342,24 @@ export default function ExpensesPage() {
     }
   }
 
+  // Download PDF from the saved historical snapshot.
+  function handleDownloadPDF(submission) {
+    if (!submission.expenses?.length) {
+      setNote(
+        "This is an older submission without an expense snapshot. Its original PDF cannot be recreated from the saved submission data."
+      );
+      return;
+    }
+
+    downloadSubmissionPDF({
+      submission,
+      user,
+    });
+  }
+
   return (
     <div className="space-y-6">
+
       <header className="page-header">
         <div>
           <div className="eyebrow">FIELD ACTIVITY</div>
@@ -283,6 +377,7 @@ export default function ExpensesPage() {
       )}
 
       {/* Add expense form */}
+
       <section className="panel">
         <div className="panel-heading">
           <div>
@@ -293,6 +388,7 @@ export default function ExpensesPage() {
 
         <form onSubmit={submit}>
           <div className="form-grid">
+
             <Field label="Date">
               <Input
                 type="date"
@@ -376,6 +472,7 @@ export default function ExpensesPage() {
                 placeholder="Additional details"
               />
             </Field>
+
           </div>
 
           <button
@@ -389,125 +486,226 @@ export default function ExpensesPage() {
         </form>
       </section>
 
-      {/* Current week's office submission */}
+      {/* Pending expenses */}
+
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+
           <div>
             <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-              Weekly meeting
+              Pending submission
             </div>
+
             <h2 className="mt-1 text-xl font-bold text-slate-900">
               Office expense submission
             </h2>
+
             <p className="mt-1 text-sm text-slate-600">
-              Record that this week's expenses were submitted to the
-              office. This does not track approval or payment.
+              Only expenses that have not been submitted previously are included.
             </p>
-            <p className="mt-2 text-sm font-medium text-slate-500">
-              {formatDate(currentWeekStart)} –{" "}
-              {formatDate(currentWeekEnd)}
-            </p>
+
+            {pendingExpenses.length > 0 && (
+              <p className="mt-2 text-sm font-medium text-slate-500">
+                {formatDate(pendingStartDate)} –{" "}
+                {formatDate(pendingEndDate)}
+              </p>
+            )}
           </div>
 
           <div className="rounded-xl bg-slate-50 px-4 py-3 sm:min-w-44">
             <div className="text-sm text-slate-500">
-              This week's expenses
+              Pending amount
             </div>
+
             <div className="mt-1 text-2xl font-bold text-slate-900">
-              {money(currentWeekTotal)}
+              {money(pendingTotal)}
             </div>
+
             <div className="mt-1 text-xs text-slate-500">
-              {currentWeekExpenses.length} entries · Mon–Sun
+              {pendingExpenses.length} unsubmitted entries
             </div>
           </div>
+
         </div>
 
         <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-slate-700">
               Note (optional)
             </span>
+
             <textarea
               value={submissionNote}
-              onChange={(event) => setSubmissionNote(event.target.value)}
+              onChange={(event) =>
+                setSubmissionNote(event.target.value)
+              }
               rows={2}
-              placeholder="e.g. Submitted during Monday weekly meeting"
+              placeholder="e.g. Submitted during office meeting"
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             />
           </label>
 
           <div className="flex flex-col gap-2">
-            {currentSubmission?.submitted && (
+
+            {pendingExpenses.length === 0 && (
               <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
                 <CheckCircle2 size={16} />
-                Submitted
-                {currentSubmission.submittedAt
-                  ? ` on ${new Date(
-                      currentSubmission.submittedAt
-                    ).toLocaleDateString("en-IN")}`
-                  : ""}
+                All expenses submitted
               </div>
             )}
+
+            {/* Preview PDF button */}
+
+            <button
+              type="button"
+              onClick={handlePreviewPDF}
+              disabled={
+                submissionBusy || pendingExpenses.length === 0
+              }
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Eye size={16} />
+              Preview PDF
+            </button>
+
+            {/* Submit button */}
 
             <button
               type="button"
               onClick={markOfficeSubmitted}
               disabled={
-                submissionBusy || currentWeekExpenses.length === 0
+                submissionBusy ||
+                !previewedSubmission?.expenses?.length
               }
               className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submissionBusy
                 ? "Saving..."
-                : currentSubmission
-                ? "Update submission record"
-                : "Mark as submitted to office"}
+                : "Submit previewed expenses"}
             </button>
+
           </div>
         </div>
+
+        {previewedSubmission?.expenses?.length > 0 && (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+            <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
+
+            <div>
+              <div className="font-semibold">
+                PDF preview prepared
+              </div>
+
+              <p className="mt-1">
+                {previewedSubmission.expenseCount} entries
+                {" · "}
+                {money(previewedSubmission.submittedAmount)}
+                {" · "}
+                Submit will save this exact previewed snapshot.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {pendingExpenses.length > 0 &&
+          !previewedSubmission && (
+            <p className="mt-3 text-xs text-slate-500">
+              Preview the PDF first. The Submit button will become available after previewing.
+            </p>
+          )}
+
       </section>
 
-      {/* Previous office submissions */}
-      {sortedSubmissions.length > 0 && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-          <div className="flex items-center gap-2">
-            <CalendarDays size={20} className="text-slate-500" />
-            <h2 className="text-lg font-bold text-slate-900">
-              Previous office submissions
-            </h2>
-          </div>
-          <p className="mt-1 text-sm text-slate-600">
-            Weekly amounts you marked as submitted.
-          </p>
+      {/* Submission history */}
 
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+
+        <div className="flex items-center gap-2">
+          <CalendarDays size={20} className="text-slate-500" />
+
+          <h2 className="text-lg font-bold text-slate-900">
+            Submission History
+          </h2>
+        </div>
+
+        <p className="mt-1 text-sm text-slate-600">
+          Each submission has its own saved expense snapshot and PDF.
+        </p>
+
+        {sortedSubmissions.length === 0 ? (
+          <div className="mt-5 rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">
+            No submission history available.
+          </div>
+        ) : (
           <div className="mt-4 space-y-3">
+
             {sortedSubmissions.map((submission) => (
               <div
                 key={submission.id}
-                className="flex flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"
               >
+
                 <div>
                   <div className="font-semibold text-slate-900">
-                    {submission.periodStart} – {submission.periodEnd}
+                    Submission - {formatDate(
+                      submission.submittedAt
+                        ? submission.submittedAt.slice(0, 10)
+                        : submission.periodStart
+                    )}
                   </div>
+
                   <div className="mt-1 text-sm text-slate-500">
+                    {submission.expenseCount ??
+                      submission.expenses?.length ??
+                      submission.expenseIds?.length ??
+                      0} entries
+
+                    {" · "}
+
+                    {submission.periodStart
+                      ? `${formatDate(submission.periodStart)} – ${formatDate(submission.periodEnd)}`
+                      : "Date range unavailable"}
+
+                    {submission.note
+                      ? ` · ${submission.note}`
+                      : ""}
+                  </div>
+
+                  <div className="mt-1 text-xs text-slate-500">
                     {submission.submittedAt
-                      ? `Submitted ${new Date(
+                      ? `Submitted at ${new Date(
                           submission.submittedAt
-                        ).toLocaleDateString("en-IN")}`
+                        ).toLocaleString("en-IN")}`
                       : "Submission date not recorded"}
-                    {submission.note ? ` · ${submission.note}` : ""}
                   </div>
                 </div>
 
-                <div className="text-lg font-bold text-slate-900">
-                  {money(submission.submittedAmount)}
+                <div className="flex flex-col gap-2 sm:items-end">
+
+                  <div className="text-lg font-bold text-slate-900">
+                    {money(submission.submittedAmount)}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadPDF(submission)}
+                    disabled={!submission.expenses?.length}
+                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Download size={16} />
+                    Download PDF
+                  </button>
+
                 </div>
               </div>
             ))}
+
           </div>
-        </section>
-      )}
+        )}
+      </section>
+
     </div>
   );
 }
