@@ -9,7 +9,8 @@ import {
   ReceiptText,
   LogOut,
   Zap,
-  Wallet
+  Wallet,
+  MessageCircle
 } from "lucide-react";
 
 import { useAuth } from "../features/auth/AuthProvider";
@@ -22,6 +23,11 @@ export default function AppShell({ children }) {
     { path: "/", label: "Overview", Icon: LayoutDashboard },
     { path: "/report", label: "Daily report", Icon: ClipboardList },
     { path: "/expenses", label: "Travel & expenses", Icon: CarFront },
+    {
+      path: "/whatsapp-groups",
+      label: "WhatsApp Groups",
+      Icon: MessageCircle,
+    },
     {
       path: "/expense-history",
       label: "Expense log",

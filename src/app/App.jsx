@@ -10,6 +10,7 @@ import HistoryPage from "../features/reports/HistoryPage";
 import AppShell from "../components/AppShell";
 import ExpenseHistoryPage from "../features/expenses/ExpenseHistoryPage";
 import CashSettlementPage from "../features/settlements/CashSettlementPage";
+import WhatsAppGroupPage from "../features/whatsapp/WhatsAppGroup";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -45,6 +46,17 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+
+<Route
+  path="/whatsapp-groups"
+  element={
+    <ProtectedRoute>
+      <AppShell>
+        <WhatsAppGroupPage />
+      </AppShell>
+    </ProtectedRoute>
+  }
+/>
 
       <Route
         path="/report"
