@@ -24,6 +24,8 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  ShieldAlert,
+  ArrowRight,
 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
@@ -100,10 +102,11 @@ export default function FollowupsPage() {
   const [googleToken, setGoogleToken] = useState(() => getSavedGoogleToken());
   const [connectingGoogle, setConnectingGoogle] = useState(false);
   const [autoSyncCalendar, setAutoSyncCalendar] = useState(true);
+  const [showGoogleSetupModal, setShowGoogleSetupModal] = useState(false);
 
   const showNotification = (text, type = "info") => {
     setNote({ text, type });
-    setTimeout(() => setNote({ text: "", type: "info" }), 4500);
+    setTimeout(() => setNote({ text: "", type: "info" }), 5000);
   };
 
   // Load follow-ups from Firebase
@@ -155,16 +158,29 @@ export default function FollowupsPage() {
     try {
       const res = await connectGoogleCalendar();
       setGoogleToken(res.token);
+      setShowGoogleSetupModal(false);
       showNotification(
         "Google Calendar connected! Future site visits will automatically sync to your calendar.",
         "success"
       );
     } catch (err) {
       console.error("Google connect error:", err);
-      showNotification(
-        `Google Calendar connection failed: ${err.message}. Popup links will be used instead.`,
-        "warning"
-      );
+      const isOpNotAllowed =
+        err?.code === "auth/operation-not-allowed" ||
+        String(err?.message || "").includes("operation-not-allowed");
+
+      if (isOpNotAllowed) {
+        setShowGoogleSetupModal(true);
+        showNotification(
+          "Firebase Console-ൽ Google Sign-in provider enable ചെയ്യേണ്ടതുണ്ട്. Setup നിർദ്ദേശങ്ങൾ താഴെ കാണാം.",
+          "warning"
+        );
+      } else {
+        showNotification(
+          `Google Calendar connection failed: ${err.message || "Unknown error"}. Popup links will be used instead.`,
+          "warning"
+        );
+      }
     } finally {
       setConnectingGoogle(false);
     }
@@ -227,6 +243,9 @@ export default function FollowupsPage() {
     try {
       let googleEventData = {};
 
+      // Prepare Google Calendar URL ahead of time
+      const calUrl = generateGoogleCalendarUrl(form);
+
       // Automatic Google Calendar Sync
       if (autoSyncCalendar) {
         if (googleToken) {
@@ -243,13 +262,11 @@ export default function FollowupsPage() {
           } catch (calErr) {
             console.warn("Direct Google API sync error:", calErr);
             // Fallback: auto-open Google Calendar pre-filled URL
-            const url = generateGoogleCalendarUrl(form);
-            window.open(url, "_blank", "noopener,noreferrer");
+            window.open(calUrl, "_blank", "noopener,noreferrer");
           }
         } else {
           // If Google OAuth is not connected yet, automatically open Google Calendar event tab
-          const url = generateGoogleCalendarUrl(form);
-          window.open(url, "_blank", "noopener,noreferrer");
+          window.open(calUrl, "_blank", "noopener,noreferrer");
         }
       }
 
@@ -537,6 +554,88 @@ export default function FollowupsPage() {
           >
             <X size={15} />
           </button>
+        </div>
+      )}
+
+      {/* Google Setup Guide Modal (Shows when auth/operation-not-allowed occurs) */}
+      {showGoogleSetupModal && (
+        <div className="rounded-2xl border-2 border-amber-300 bg-amber-50/90 p-5 shadow-sm space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0">
+                <ShieldAlert size={18} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-amber-950">
+                  Firebase Console-ൽ Google Sign-in Enable ചെയ്യണം (30 Seconds Setup)
+                </h3>
+                <p className="text-xs text-amber-800">
+                  Firebase Error: <code className="bg-amber-100 px-1 py-0.5 rounded text-[11px] font-mono font-bold">auth/operation-not-allowed</code>. 
+                  ഇത് പരിഹരിക്കാൻ താഴെയുള്ള സ്റ്റെപ്പുകൾ ചെയ്യുക:
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowGoogleSetupModal(false)}
+              className="text-amber-800 hover:text-amber-950 p-1"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+            <div className="bg-white rounded-xl p-3 border border-amber-200 text-xs space-y-1">
+              <span className="font-extrabold text-amber-600">Step 1</span>
+              <p className="font-semibold text-slate-800">Firebase Console തുറക്കുക</p>
+              <p className="text-slate-500 text-[11px]">
+                താഴെയുള്ള ബട്ടൺ ക്ലിക്ക് ചെയ്ത് Authentication &gt; Sign-in method പേജിലേക്ക് പോവുക.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl p-3 border border-amber-200 text-xs space-y-1">
+              <span className="font-extrabold text-amber-600">Step 2</span>
+              <p className="font-semibold text-slate-800">Google Enable ചെയ്യുക</p>
+              <p className="text-slate-500 text-[11px]">
+                Sign-in providers ലിസ്റ്റിൽ &quot;Google&quot; ക്ലിക്ക് ചെയ്ത് Enable ടോഗിൾ ഓൺ ചെയ്യുക.
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl p-3 border border-amber-200 text-xs space-y-1">
+              <span className="font-extrabold text-amber-600">Step 3</span>
+              <p className="font-semibold text-slate-800">Email തിരഞ്ഞെടുത്ത് Save ചെയ്യുക</p>
+              <p className="text-slate-500 text-[11px]">
+                Project support email നൽകി Save അമർത്തുക. ശേഷം ഇവിടെ വന്ന് &quot;Connect&quot; ചെയ്യാം!
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <a
+              href="https://console.firebase.google.com/project/sales-report-14e06/authentication/providers"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 transition shadow-sm"
+            >
+              <span>Open Firebase Sign-in Console</span>
+              <ExternalLink size={13} />
+            </a>
+
+            <button
+              type="button"
+              onClick={handleConnectGoogle}
+              disabled={connectingGoogle}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-slate-800 border border-slate-300 hover:bg-slate-50 transition"
+            >
+              <Calendar size={13} className="text-blue-600" />
+              <span>Retry Connect Google Calendar</span>
+            </button>
+
+            <span className="text-[11px] text-amber-800 italic">
+              💡 ഇത് ചെയ്തില്ലെങ്കിലും നിങ്ങൾ ലീഡ് ഷെഡ്യൂൾ ചെയ്യുമ്പോൾ Google Calendar തനിയെ തുറന്നുവന്ന് സേവ് ചെയ്യാനാകും!
+            </span>
+          </div>
         </div>
       )}
 
