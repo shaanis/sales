@@ -10,6 +10,7 @@ import HistoryPage from "../features/reports/HistoryPage";
 import AppShell from "../components/AppShell";
 import ExpenseHistoryPage from "../features/expenses/ExpenseHistoryPage";
 import CashSettlementPage from "../features/settlements/CashSettlementPage";
+import FollowupsPage from "../features/followups/FollowupsPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -47,6 +48,17 @@ export default function App() {
       />
 
       <Route
+        path="/followups"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <FollowupsPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/report"
         element={
           <ProtectedRoute>
@@ -56,12 +68,17 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+
       <Route
-  path="/settlements"
-  element={
-    <AppShell><CashSettlementPage /></AppShell>
-  }
-/>
+        path="/settlements"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <CashSettlementPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/expenses"
@@ -73,14 +90,17 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+
       <Route
-  path="/expense-history"
-  element={
-    <AppShell>
-      <ExpenseHistoryPage />
-    </AppShell>
-  }
-/>
+        path="/expense-history"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <ExpenseHistoryPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/history"

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ClipboardCopy,
   Download,
@@ -12,6 +13,7 @@ import {
   Check,
   AlertCircle,
   Loader2,
+  Pencil,
 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
@@ -20,6 +22,7 @@ import { formatReport } from "./model";
 
 export default function HistoryPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState("");
@@ -75,6 +78,17 @@ export default function HistoryPage() {
     };
   }, [user?.uid]);
 
+  // Track duplicate dates in records
+  const dateCounts = useMemo(() => {
+    const counts = {};
+    items.forEach((r) => {
+      if (r.date) {
+        counts[r.date] = (counts[r.date] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [items]);
+
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -110,7 +124,7 @@ export default function HistoryPage() {
   }, [items, search]);
 
   function getReportText(item) {
-    return formatReport(item);
+    return formatReport(item, [], items);
   }
 
   async function copy(item) {
@@ -137,11 +151,17 @@ export default function HistoryPage() {
       }
 
       setCopiedId(item.id);
-      showNotification("Report copied successfully. Ready to paste.", "success");
+      showNotification(
+        "Report copied successfully. Ready to paste.",
+        "success"
+      );
       setTimeout(() => setCopiedId(null), 2000);
     } catch (error) {
       console.error("Failed to copy report:", error);
-      showNotification("Could not copy the report. Please try again.", "error");
+      showNotification(
+        "Could not copy the report. Please try again.",
+        "error"
+      );
     }
   }
 
@@ -166,7 +186,10 @@ export default function HistoryPage() {
       showNotification("Report downloaded successfully.", "success");
     } catch (error) {
       console.error("Failed to download report:", error);
-      showNotification("Could not download the report. Please try again.", "error");
+      showNotification(
+        "Could not download the report. Please try again.",
+        "error"
+      );
     }
   }
 
@@ -181,9 +204,16 @@ export default function HistoryPage() {
     }
   }
 
+  function editReport(item) {
+    navigate(`/report?date=${item.date}&id=${item.id}`);
+  }
+
   async function remove(item) {
     if (!user?.uid || !item.id) {
-      showNotification("Unable to identify this report. Please refresh.", "error");
+      showNotification(
+        "Unable to identify this report. Please refresh.",
+        "error"
+      );
       return;
     }
 
@@ -197,11 +227,16 @@ export default function HistoryPage() {
 
     try {
       await deleteRecord(user.uid, "reports", item.id);
-      setItems((previous) => previous.filter((record) => record.id !== item.id));
+      setItems((previous) =>
+        previous.filter((record) => record.id !== item.id)
+      );
       showNotification("Report deleted successfully.", "success");
     } catch (error) {
       console.error("Failed to delete report:", error);
-      showNotification("Could not delete this report. Please try again.", "error");
+      showNotification(
+        "Could not delete this report. Please try again.",
+        "error"
+      );
     } finally {
       setDeletingId(null);
     }
@@ -223,7 +258,6 @@ export default function HistoryPage() {
   return (
     <main className="min-h-screen bg-slate-50/50 py-8 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-6xl mx-auto space-y-6">
-        
         {/* Page Header */}
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
           <div>
@@ -235,7 +269,7 @@ export default function HistoryPage() {
               Report History
             </h1>
             <p className="text-slate-500 text-sm mt-1">
-              Manage, search, export and share your saved daily sales records.
+              Manage, search, export and edit your saved daily sales records.
             </p>
           </div>
 
@@ -266,9 +300,15 @@ export default function HistoryPage() {
           >
             <div className="flex items-center gap-2.5">
               {note.type === "error" ? (
-                <AlertCircle size={18} className="text-rose-600 flex-shrink-0" />
+                <AlertCircle
+                  size={18}
+                  className="text-rose-600 flex-shrink-0"
+                />
               ) : (
-                <Check size={18} className="text-emerald-600 flex-shrink-0" />
+                <Check
+                  size={18}
+                  className="text-emerald-600 flex-shrink-0"
+                />
               )}
               <span>{note.text}</span>
             </div>
@@ -286,11 +326,12 @@ export default function HistoryPage() {
 
         {/* Content Panel */}
         <section className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-          
           {/* Panel Toolbar */}
           <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-slate-50/40">
             <div>
-              <h2 className="text-base font-semibold text-slate-900">Saved Reports</h2>
+              <h2 className="text-base font-semibold text-slate-900">
+                Saved Reports
+              </h2>
               <p className="text-xs text-slate-500 mt-0.5">
                 {loading
                   ? "Loading records..."
@@ -356,7 +397,7 @@ export default function HistoryPage() {
             </div>
           ) : (
             <>
-              {/* Desktop / Tablet Table (Hidden on small screens) */}
+              {/* Desktop / Tablet Table */}
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left text-sm text-slate-600">
                   <thead className="bg-slate-50/75 text-[11px] uppercase tracking-wider font-semibold text-slate-400 border-b border-slate-100">
@@ -370,96 +411,125 @@ export default function HistoryPage() {
                   </thead>
 
                   <tbody className="divide-y divide-slate-100">
-                    {filtered.map((item) => (
-                      <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="py-4 px-6 whitespace-nowrap">
-                          <div className="inline-flex items-center gap-2 text-slate-800 font-medium">
-                            <CalendarDays size={15} className="text-slate-400" />
-                            <span>{formatDate(item.date)}</span>
-                          </div>
-                        </td>
+                    {filtered.map((item) => {
+                      const isDuplicate = (dateCounts[item.date] || 0) > 1;
 
-                        <td className="py-4 px-6">
-                          <div className="font-medium text-slate-800">
-                            {item.area || "Daily sales report"}
-                          </div>
-                          {item.activityType && (
-                            <div className="inline-flex items-center gap-1 text-xs text-slate-400 mt-0.5">
-                              <MapPin size={12} />
-                              <span>{item.activityType}</span>
-                            </div>
-                          )}
-                        </td>
-
-                        <td className="py-4 px-6 whitespace-nowrap">
-                          <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
-                            {item.executive || "Not specified"}
-                          </span>
-                        </td>
-
-                        <td className="py-4 px-6 text-center font-semibold text-slate-800">
-                          {item.poCount || "0"}
-                        </td>
-
-                        <td className="py-4 px-6 text-right whitespace-nowrap">
-                          <div className="inline-flex items-center gap-1 justify-end">
-                            {/* WhatsApp Button */}
-                            <button
-                              type="button"
-                              title="Share on WhatsApp"
-                              aria-label={`Share report for ${item.date || "this date"} on WhatsApp`}
-                              onClick={() => shareWhatsApp(item)}
-                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                            >
-                              <MessageCircle size={17} />
-                            </button>
-
-                            {/* Copy Button */}
-                            <button
-                              type="button"
-                              title="Copy report"
-                              aria-label="Copy report"
-                              onClick={() => copy(item)}
-                              className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-                            >
-                              {copiedId === item.id ? (
-                                <Check size={16} className="text-emerald-600" />
-                              ) : (
-                                <ClipboardCopy size={16} />
+                      return (
+                        <tr
+                          key={item.id}
+                          className="hover:bg-slate-50/70 transition-colors"
+                        >
+                          <td className="py-4 px-6 whitespace-nowrap">
+                            <div className="inline-flex items-center gap-2 text-slate-800 font-medium">
+                              <CalendarDays
+                                size={15}
+                                className="text-slate-400"
+                              />
+                              <span>{formatDate(item.date)}</span>
+                              {isDuplicate && (
+                                <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                                  Duplicate
+                                </span>
                               )}
-                            </button>
+                            </div>
+                          </td>
 
-                            {/* Download Button */}
-                            <button
-                              type="button"
-                              title="Download report"
-                              aria-label="Download report"
-                              onClick={() => download(item)}
-                              className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-                            >
-                              <Download size={16} />
-                            </button>
+                          <td className="py-4 px-6">
+                            <div className="font-medium text-slate-800">
+                              {item.area || "Daily sales report"}
+                            </div>
+                            {item.activityType && (
+                              <div className="inline-flex items-center gap-1 text-xs text-slate-400 mt-0.5">
+                                <MapPin size={12} />
+                                <span>{item.activityType}</span>
+                              </div>
+                            )}
+                          </td>
 
-                            {/* Delete Button */}
-                            <button
-                              type="button"
-                              title="Delete report"
-                              aria-label="Delete report"
-                              disabled={deletingId === item.id}
-                              onClick={() => remove(item)}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-40"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          <td className="py-4 px-6 whitespace-nowrap">
+                            <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                              {item.executive || "Not specified"}
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-6 text-center font-semibold text-slate-800">
+                            {item.poCount || "0"}
+                          </td>
+
+                          <td className="py-4 px-6 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1 justify-end">
+                              {/* Edit Button */}
+                              <button
+                                type="button"
+                                title="Edit report"
+                                aria-label={`Edit report for ${item.date || "this date"}`}
+                                onClick={() => editReport(item)}
+                                className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              >
+                                <Pencil size={16} />
+                              </button>
+
+                              {/* WhatsApp Button */}
+                              <button
+                                type="button"
+                                title="Share on WhatsApp"
+                                aria-label={`Share report for ${item.date || "this date"} on WhatsApp`}
+                                onClick={() => shareWhatsApp(item)}
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                              >
+                                <MessageCircle size={17} />
+                              </button>
+
+                              {/* Copy Button */}
+                              <button
+                                type="button"
+                                title="Copy report"
+                                aria-label="Copy report"
+                                onClick={() => copy(item)}
+                                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                              >
+                                {copiedId === item.id ? (
+                                  <Check
+                                    size={16}
+                                    className="text-emerald-600"
+                                  />
+                                ) : (
+                                  <ClipboardCopy size={16} />
+                                )}
+                              </button>
+
+                              {/* Download Button */}
+                              <button
+                                type="button"
+                                title="Download report"
+                                aria-label="Download report"
+                                onClick={() => download(item)}
+                                className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                              >
+                                <Download size={16} />
+                              </button>
+
+                              {/* Delete Button */}
+                              <button
+                                type="button"
+                                title="Delete report"
+                                aria-label="Delete report"
+                                disabled={deletingId === item.id}
+                                onClick={() => remove(item)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-40"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
 
-              {/* Mobile Card List (Visible only on mobile screens) */}
+              {/* Mobile Card List */}
               <div className="md:hidden divide-y divide-slate-100">
                 {filtered.map((item) => (
                   <article key={item.id} className="p-4 space-y-3">
@@ -467,6 +537,11 @@ export default function HistoryPage() {
                       <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
                         <CalendarDays size={14} className="text-slate-400" />
                         {formatDate(item.date)}
+                        {(dateCounts[item.date] || 0) > 1 && (
+                          <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.2 rounded font-medium">
+                            Duplicate
+                          </span>
+                        )}
                       </div>
                       <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
                         PO: {item.poCount || "0"}
@@ -489,14 +564,25 @@ export default function HistoryPage() {
                     </div>
 
                     <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-                      <button
-                        type="button"
-                        onClick={() => shareWhatsApp(item)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-medium transition"
-                      >
-                        <MessageCircle size={15} />
-                        WhatsApp
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => editReport(item)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-medium transition"
+                        >
+                          <Pencil size={13} />
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => shareWhatsApp(item)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-medium transition"
+                        >
+                          <MessageCircle size={13} />
+                          WhatsApp
+                        </button>
+                      </div>
 
                       <div className="flex items-center gap-1">
                         <button

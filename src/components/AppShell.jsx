@@ -1,6 +1,5 @@
-
-import React from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { NavLink, useNavigate, Link } from "react-router-dom";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -9,17 +8,52 @@ import {
   ReceiptText,
   LogOut,
   Zap,
-  Wallet
+  Wallet,
+  CalendarClock,
+  Bell,
 } from "lucide-react";
 
 import { useAuth } from "../features/auth/AuthProvider";
+import { listRecords } from "../lib/data";
 
 export default function AppShell({ children }) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
+  const [todayFollowupsCount, setTodayFollowupsCount] = useState(0);
+
+  // Poll / load today's pending followups count for notifications
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    let active = true;
+    listRecords(user.uid, "followups")
+      .then((records) => {
+        if (!active) return;
+        const todayStr = new Date().toLocaleDateString("en-CA");
+        const count = (records || []).filter(
+          (r) =>
+            r.date === todayStr &&
+            r.status !== "Completed" &&
+            r.status !== "Cancelled"
+        ).length;
+        setTodayFollowupsCount(count);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [user?.uid]);
+
   const navigation = [
     { path: "/", label: "Overview", Icon: LayoutDashboard },
+    {
+      path: "/followups",
+      label: "Visits & Follow-ups",
+      Icon: CalendarClock,
+      badge: todayFollowupsCount > 0 ? todayFollowupsCount : null,
+    },
     { path: "/report", label: "Daily report", Icon: ClipboardList },
     { path: "/expenses", label: "Travel & expenses", Icon: CarFront },
     {
@@ -28,8 +62,7 @@ export default function AppShell({ children }) {
       Icon: ReceiptText,
     },
     { path: "/history", label: "Report history", Icon: CalendarDays },
-    {path:"/settlements",label:"Settlements",Icon:Wallet}
-    
+    { path: "/settlements", label: "Settlements", Icon: Wallet },
   ];
 
   async function logout() {
@@ -49,7 +82,7 @@ export default function AppShell({ children }) {
 
   const linkClass = ({ isActive }) =>
     [
-      "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold",
+      "flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-sm font-semibold",
       "transition-all duration-200",
       isActive
         ? "bg-[#21464b] text-white [&_svg]:text-[#51d8c6]"
@@ -61,19 +94,34 @@ export default function AppShell({ children }) {
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-[#2b494e] bg-[#102b32] text-[#d7e6e7] lg:flex">
         {/* Brand */}
-        <div className="flex shrink-0 items-center gap-3 border-b border-[#2b494e] px-5 py-6">
-          <div className="flex h-[41px] w-[41px] shrink-0 items-center justify-center rounded-xl bg-[#12a594] font-['Manrope'] text-sm font-extrabold text-white">
-            ES
+        <div className="flex shrink-0 items-center justify-between border-b border-[#2b494e] px-5 py-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-[41px] w-[41px] shrink-0 items-center justify-center rounded-xl bg-[#12a594] font-['Manrope'] text-sm font-extrabold text-white">
+              ES
+            </div>
+
+            <div className="min-w-0">
+              <h1 className="font-['Manrope'] text-sm font-extrabold tracking-[1px] text-white">
+                ECHONIX
+              </h1>
+              <p className="mt-1 text-[10px] text-[#8ea9ac]">
+                Sales workspace
+              </p>
+            </div>
           </div>
 
-          <div className="min-w-0">
-            <h1 className="font-['Manrope'] text-sm font-extrabold tracking-[1px] text-white">
-              ECHONIX
-            </h1>
-            <p className="mt-1 text-[10px] text-[#8ea9ac]">
-              Sales workspace
-            </p>
-          </div>
+          {todayFollowupsCount > 0 && (
+            <Link
+              to="/followups"
+              title={`${todayFollowupsCount} site visit(s) due today!`}
+              className="relative p-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition animate-pulse"
+            >
+              <Bell size={16} />
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-extrabold text-slate-950">
+                {todayFollowupsCount}
+              </span>
+            </Link>
+          )}
         </div>
 
         {/* Navigation */}
@@ -83,19 +131,26 @@ export default function AppShell({ children }) {
           </p>
 
           <nav className="grid gap-1">
-            {navigation.map(({ path, label, Icon }) => (
+            {navigation.map(({ path, label, Icon, badge }) => (
               <NavLink
                 key={path}
                 to={path}
                 end={path === "/"}
                 className={linkClass}
               >
-                <Icon size={18} strokeWidth={1.9} />
-                <span>{label}</span>
+                <div className="flex items-center gap-3">
+                  <Icon size={18} strokeWidth={1.9} />
+                  <span>{label}</span>
+                </div>
+
+                {badge && (
+                  <span className="flex h-5 min-w-[20px] px-1.5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-extrabold text-slate-950">
+                    {badge}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>
-
         </div>
 
         {/* Profile and logout */}
@@ -144,6 +199,18 @@ export default function AppShell({ children }) {
               </p>
             </div>
 
+            {todayFollowupsCount > 0 && (
+              <Link
+                to="/followups"
+                className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700"
+              >
+                <Bell size={17} />
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-extrabold text-white">
+                  {todayFollowupsCount}
+                </span>
+              </Link>
+            )}
+
             <button
               type="button"
               onClick={logout}
@@ -157,14 +224,14 @@ export default function AppShell({ children }) {
 
           {/* Mobile navigation */}
           <nav className="-mx-1 mt-3 flex gap-1.5 overflow-x-auto px-1 pb-1">
-            {navigation.map(({ path, label, Icon }) => (
+            {navigation.map(({ path, label, Icon, badge }) => (
               <NavLink
                 key={path}
                 to={path}
                 end={path === "/"}
                 className={({ isActive }) =>
                   [
-                    "flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-[11px] font-semibold transition",
+                    "flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-[11px] font-semibold transition relative",
                     isActive
                       ? "bg-[#21464b] text-white [&_svg]:text-[#51d8c6]"
                       : "bg-[#f4f7f8] text-[#49636a] hover:bg-[#e7eeee]",
@@ -172,7 +239,12 @@ export default function AppShell({ children }) {
                 }
               >
                 <Icon size={15} />
-                {label}
+                <span>{label}</span>
+                {badge && (
+                  <span className="flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-amber-500 text-[9px] font-extrabold text-slate-950">
+                    {badge}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>
