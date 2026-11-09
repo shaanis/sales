@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { NavLink, useNavigate, Link } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -11,41 +11,61 @@ import {
   Wallet,
   CalendarClock,
   Bell,
+  Phone,
+  MessageCircle,
+  X,
+  MapPin,
+  Clock,
+  Sparkles,
 } from "lucide-react";
 
 import { useAuth } from "../features/auth/AuthProvider";
-import { listRecords } from "../lib/data";
+import { listRecords, updateRecord } from "../lib/data";
+import {
+  scheduleExactAlarms,
+  formatTime,
+  generateCustomerWhatsAppUrl,
+  playAlarmChime,
+} from "../features/followups/notificationHelper";
 
 export default function AppShell({ children }) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
   const [todayFollowupsCount, setTodayFollowupsCount] = useState(0);
+  const [activeAlarmItem, setActiveAlarmItem] = useState(null);
 
-  // Poll / load today's pending followups count for notifications
-  useEffect(() => {
+  // Load and register exact-second alarm scheduler
+  const setupAlarms = useCallback(async () => {
     if (!user?.uid) return;
 
-    let active = true;
-    listRecords(user.uid, "followups")
-      .then((records) => {
-        if (!active) return;
-        const todayStr = new Date().toLocaleDateString("en-CA");
-        const count = (records || []).filter(
-          (r) =>
-            r.date === todayStr &&
-            r.status !== "Completed" &&
-            r.status !== "Cancelled"
-        ).length;
-        setTodayFollowupsCount(count);
-      })
-      .catch(() => {});
+    try {
+      const records = await listRecords(user.uid, "followups");
+      const list = Array.isArray(records) ? records : [];
+      const todayStr = new Date().toLocaleDateString("en-CA");
 
-    return () => {
-      active = false;
-    };
+      const count = list.filter(
+        (r) =>
+          r.date === todayStr &&
+          r.status !== "Completed" &&
+          r.status !== "Cancelled"
+      ).length;
+      setTodayFollowupsCount(count);
+
+      // Register exact-second timer across the entire app
+      scheduleExactAlarms(list, (alarmItem) => {
+        setActiveAlarmItem(alarmItem);
+      });
+    } catch (err) {
+      console.error("Failed to load alarms in AppShell:", err);
+    }
   }, [user?.uid]);
 
+  useEffect(() => {
+    setupAlarms();
+  }, [setupAlarms]);
+
+  // Navigation routes
   const navigation = [
     { path: "/", label: "Overview", Icon: LayoutDashboard },
     {
@@ -74,6 +94,26 @@ export default function AppShell({ children }) {
     }
   }
 
+  // Dismiss active alarm
+  function dismissAlarm() {
+    setActiveAlarmItem(null);
+  }
+
+  // Mark alarm followup completed
+  async function completeAlarmItem(item) {
+    if (!user?.uid || !item?.id) return;
+    try {
+      await updateRecord(user.uid, "followups", item.id, {
+        status: "Completed",
+        completedAt: new Date().toISOString(),
+      });
+      dismissAlarm();
+      setupAlarms();
+    } catch (err) {
+      console.error("Could not complete:", err);
+    }
+  }
+
   const displayName = user?.displayName || "Sales executive";
   const email = user?.email || "";
   const avatar = (user?.displayName || user?.email || "S")
@@ -91,6 +131,127 @@ export default function AppShell({ children }) {
 
   return (
     <div className="min-h-screen bg-[#f4f7f8] text-[#19363e]">
+      {/* Real-Time Exact Alarm Modal Popup (Fires on the exact second anywhere in the app) */}
+      {activeAlarmItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl border-2 border-rose-500 animate-bounce-short">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-rose-600 to-amber-600 p-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner animate-pulse">
+                  <Bell size={26} className="text-white" />
+                </div>
+                <div>
+                  <div className="inline-block px-2 py-0.5 rounded-full text-[10px] font-black tracking-widest uppercase bg-white/25 text-white">
+                    EXACT TIME REACHED
+                  </div>
+                  <h3 className="text-xl font-black tracking-tight leading-tight mt-0.5">
+                    {formatTime(activeAlarmItem.time)} Appointment Alarm!
+                  </h3>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={dismissAlarm}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              <div>
+                <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">
+                  {activeAlarmItem.type || "Site Visit"} with
+                </span>
+                <h4 className="text-2xl font-extrabold text-slate-900 mt-0.5">
+                  {activeAlarmItem.name}
+                </h4>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                <div className="flex items-center gap-2 text-slate-700">
+                  <Clock size={15} className="text-rose-500 shrink-0" />
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase">
+                      Scheduled Time
+                    </span>
+                    <strong className="text-slate-900">
+                      {formatTime(activeAlarmItem.time)} Today
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 text-slate-700">
+                  <MapPin size={15} className="text-teal-600 shrink-0" />
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase">
+                      Location
+                    </span>
+                    <strong className="text-slate-900 truncate block">
+                      {activeAlarmItem.area || "Site location"}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              {activeAlarmItem.requirement && (
+                <p className="text-xs text-slate-600 flex items-center gap-1.5 bg-amber-50/70 text-amber-900 p-2.5 rounded-xl border border-amber-200/80">
+                  <Sparkles size={14} className="text-amber-600 shrink-0" />
+                  <span>
+                    <strong>Requirement:</strong> {activeAlarmItem.requirement}
+                  </span>
+                </p>
+              )}
+
+              {activeAlarmItem.notes && (
+                <p className="text-xs text-slate-600 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  &quot;{activeAlarmItem.notes}&quot;
+                </p>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+                {activeAlarmItem.phone && (
+                  <a
+                    href={`tel:${activeAlarmItem.phone}`}
+                    className="flex-1 inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition shadow-md shadow-emerald-600/20"
+                  >
+                    <Phone size={16} />
+                    Call {activeAlarmItem.phone}
+                  </a>
+                )}
+
+                {activeAlarmItem.phone && (
+                  <a
+                    href={generateCustomerWhatsAppUrl(
+                      activeAlarmItem,
+                      user?.displayName
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold bg-teal-50 text-teal-800 hover:bg-teal-100 border border-teal-200 transition"
+                  >
+                    <MessageCircle size={16} />
+                    WhatsApp
+                  </a>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => completeAlarmItem(activeAlarmItem)}
+                  className="py-3 px-4 rounded-xl text-sm font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition"
+                >
+                  Mark Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-[#2b494e] bg-[#102b32] text-[#d7e6e7] lg:flex">
         {/* Brand */}

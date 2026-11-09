@@ -89,10 +89,12 @@ export async function createGoogleCalendarEvent(accessToken, followup) {
 
   const startIso = `${date}T${startHour}:${startMin}:00`;
 
-  // Default duration: 1 hour
-  const endHourNum = (parseInt(h, 10) + 1) % 24;
-  const endHour = String(endHourNum).padStart(2, "0");
-  const endIso = `${date}T${endHour}:${startMin}:00`;
+  // 10-minute appointment slot instead of 1 hour
+  const startMinutesTotal = parseInt(h, 10) * 60 + parseInt(m || "00", 10);
+  const endMinutesTotal = (startMinutesTotal + 10) % (24 * 60);
+  const endHour = String(Math.floor(endMinutesTotal / 60)).padStart(2, "0");
+  const endMin = String(endMinutesTotal % 60).padStart(2, "0");
+  const endIso = `${date}T${endHour}:${endMin}:00`;
 
   // Get local timezone, e.g. "Asia/Kolkata"
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata";
@@ -102,7 +104,7 @@ export async function createGoogleCalendarEvent(accessToken, followup) {
     location: area || "",
     description: `Customer: ${name}\nPhone: ${phone || "N/A"}\nType: ${type || "Site Visit"}\nRequirement: ${requirement || "Solar Project"}\nNotes: ${notes || "None"}\n\nScheduled via ECHONIX Field Sales App`,
     start: {
-      dateTime: `${startIso}+05:30`, // default to IST offset or ISO
+      dateTime: `${startIso}+05:30`,
       timeZone: timeZone,
     },
     end: {
@@ -112,8 +114,7 @@ export async function createGoogleCalendarEvent(accessToken, followup) {
     reminders: {
       useDefault: false,
       overrides: [
-        { method: "popup", minutes: 30 }, // 30 minutes before on mobile
-        { method: "popup", minutes: 60 }, // 1 hour before
+        { method: "popup", minutes: 0 }, // NOTIFY EXACTLY AT START TIME (0 mins = 10:22 PM!)
       ],
     },
   };

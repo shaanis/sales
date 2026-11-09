@@ -26,6 +26,7 @@ import {
   ExternalLink,
   ShieldAlert,
   ArrowRight,
+  Volume2,
 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
@@ -37,7 +38,9 @@ import {
 } from "../../lib/data";
 import {
   requestNotificationPermission,
-  checkAndNotifyFollowups,
+  scheduleExactAlarms,
+  testAlarm,
+  playAlarmChime,
   formatTime,
   generateGoogleCalendarUrl,
   generateCustomerWhatsAppUrl,
@@ -123,8 +126,8 @@ export default function FollowupsPage() {
       const list = Array.isArray(records) ? records : [];
       setItems(list);
 
-      // Check and send browser notifications if allowed
-      checkAndNotifyFollowups(list);
+      // Schedule exact-second alarms and notifications
+      scheduleExactAlarms(list);
     } catch (err) {
       console.error("Failed to load follow-ups:", err);
       showNotification("Could not load follow-ups from cloud.", "error");
@@ -143,7 +146,7 @@ export default function FollowupsPage() {
     setNotifPermission(res.status);
     if (res.status === "granted") {
       showNotification("Browser reminder notifications enabled!", "success");
-      checkAndNotifyFollowups(items);
+      scheduleExactAlarms(items);
     } else {
       showNotification(
         "Notification permission was not granted. You can still view in-app reminders.",
@@ -314,8 +317,12 @@ export default function FollowupsPage() {
       setEditingId(null);
       setFormOpen(false);
 
-      // Trigger check for notification
-      checkAndNotifyFollowups(items);
+      // Schedule exact real-time alarm immediately
+      scheduleExactAlarms(
+        editingId
+          ? items.map((i) => (i.id === editingId ? { ...i, ...payload } : i))
+          : [{ ...payload, id: "temp-new" }, ...items]
+      );
     } catch (err) {
       console.error("Save error:", err);
       showNotification(`Save failed: ${err.message}`, "error");
