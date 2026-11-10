@@ -11,6 +11,7 @@ import AppShell from "../components/AppShell";
 import ExpenseHistoryPage from "../features/expenses/ExpenseHistoryPage";
 import CashSettlementPage from "../features/settlements/CashSettlementPage";
 import FollowupsPage from "../features/followups/FollowupsPage";
+import LeadsPage from "../features/leads/LeadsPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -42,6 +43,17 @@ export default function App() {
           <ProtectedRoute>
             <AppShell>
               <DashboardPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/leads"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <LeadsPage />
             </AppShell>
           </ProtectedRoute>
         }

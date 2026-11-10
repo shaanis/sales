@@ -12,6 +12,9 @@ import {
   MessageCircle,
   Bell,
   CheckCircle2,
+  Users,
+  MapPin,
+  ClipboardPaste,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -23,6 +26,7 @@ import {
   generateCustomerWhatsAppUrl,
   checkAndNotifyFollowups,
 } from "../followups/notificationHelper";
+import { generateLeadWhatsAppUrl } from "../leads/leadsModel";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -30,6 +34,7 @@ export default function DashboardPage() {
   const [reports, setReports] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [followups, setFollowups] = useState([]);
+  const [leads, setLeads] = useState([]);
   const [note, setNote] = useState("");
 
   useEffect(() => {
@@ -41,13 +46,15 @@ export default function DashboardPage() {
       listRecords(user.uid, "reports"),
       listRecords(user.uid, "expenses"),
       listRecords(user.uid, "followups"),
+      listRecords(user.uid, "leads").catch(() => []),
     ])
-      .then(([reportRecords, expenseRecords, followupRecords]) => {
+      .then(([reportRecords, expenseRecords, followupRecords, leadRecords]) => {
         if (!active) return;
 
         setReports(reportRecords);
         setExpenses(expenseRecords);
         setFollowups(followupRecords);
+        setLeads(leadRecords || []);
         setNote("");
 
         // Trigger browser notification if permissions exist
@@ -87,6 +94,11 @@ export default function DashboardPage() {
       });
     return Array.from(map.values());
   }, [reports, month]);
+
+  // Leads pending first call
+  const pendingLeads = useMemo(() => {
+    return leads.filter((l) => l.callStatus === "Pending");
+  }, [leads]);
 
   const monthlyExpenses = expenses.filter((expense) =>
     expense.date?.startsWith(month)
@@ -139,9 +151,14 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Link className="btn secondary" to="/leads">
+            <Users size={16} />
+            Leads {pendingLeads.length > 0 ? `(${pendingLeads.length})` : ""}
+          </Link>
+
           <Link className="btn secondary" to="/followups">
             <CalendarClock size={16} />
-            Schedule Visit
+            Visits
           </Link>
 
           <Link className="btn primary" to="/report">
@@ -152,6 +169,83 @@ export default function DashboardPage() {
       </header>
 
       {note && <div className="notice">{note}</div>}
+
+      {/* Fresh Incoming Leads Alert Banner */}
+      {pendingLeads.length > 0 && (
+        <section className="rounded-2xl border-2 border-teal-300 bg-teal-50/80 p-4 sm:p-5 shadow-sm mb-6">
+          <div className="flex items-start justify-between gap-3 pb-3 border-b border-teal-200">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <Users size={18} />
+              </div>
+              <div>
+                <h2 className="text-sm sm:text-base font-bold text-teal-950">
+                  ⚡ Incoming Leads Pending Call ({pendingLeads.length} Fresh)
+                </h2>
+                <p className="text-xs text-teal-800">
+                  New customer inquiries received. Tap to call or message via WhatsApp:
+                </p>
+              </div>
+            </div>
+
+            <Link
+              to="/leads"
+              className="text-xs font-bold text-teal-950 bg-teal-200 hover:bg-teal-300 px-3 py-1.5 rounded-lg transition"
+            >
+              Open Leads CRM →
+            </Link>
+          </div>
+
+          <div className="mt-3 divide-y divide-teal-100">
+            {pendingLeads.slice(0, 4).map((lead) => {
+              const waUrl = generateLeadWhatsAppUrl(lead, user?.displayName);
+
+              return (
+                <div
+                  key={lead.id}
+                  className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <strong className="text-sm font-bold text-slate-900">
+                        {lead.name}
+                      </strong>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-teal-100 text-teal-800">
+                        {lead.source || "WhatsApp"}
+                      </span>
+                      {lead.section && (
+                        <span className="text-xs text-slate-600 flex items-center gap-1 font-medium">
+                          <MapPin size={11} className="text-teal-600" />
+                          {lead.section}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`tel:${lead.phone}`}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1.5 transition shadow-xs"
+                    >
+                      <Phone size={12} />
+                      Call {lead.phone}
+                    </a>
+                    <a
+                      href={waUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-teal-100 text-teal-800 hover:bg-teal-200 flex items-center gap-1.5 transition border border-teal-200"
+                    >
+                      <MessageCircle size={12} />
+                      WhatsApp
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Reminder Notification Banner if visits are due today */}
       {todayFollowups.length > 0 && (

@@ -17,6 +17,7 @@ import {
   MapPin,
   Clock,
   Sparkles,
+  Users,
 } from "lucide-react";
 
 import { useAuth } from "../features/auth/AuthProvider";
@@ -33,15 +34,20 @@ export default function AppShell({ children }) {
   const navigate = useNavigate();
 
   const [todayFollowupsCount, setTodayFollowupsCount] = useState(0);
+  const [pendingLeadsCount, setPendingLeadsCount] = useState(0);
   const [activeAlarmItem, setActiveAlarmItem] = useState(null);
 
-  // Load and register exact-second alarm scheduler
+  // Load alarms and lead notifications
   const setupAlarms = useCallback(async () => {
     if (!user?.uid) return;
 
     try {
-      const records = await listRecords(user.uid, "followups");
+      const [records, leadRecords] = await Promise.all([
+        listRecords(user.uid, "followups"),
+        listRecords(user.uid, "leads").catch(() => []),
+      ]);
       const list = Array.isArray(records) ? records : [];
+      const leadsList = Array.isArray(leadRecords) ? leadRecords : [];
       const todayStr = new Date().toLocaleDateString("en-CA");
 
       const count = list.filter(
@@ -51,6 +57,11 @@ export default function AppShell({ children }) {
           r.status !== "Cancelled"
       ).length;
       setTodayFollowupsCount(count);
+
+      const uncalledCount = leadsList.filter(
+        (l) => l.callStatus === "Pending"
+      ).length;
+      setPendingLeadsCount(uncalledCount);
 
       // Register exact-second timer across the entire app
       scheduleExactAlarms(list, (alarmItem) => {
@@ -68,6 +79,12 @@ export default function AppShell({ children }) {
   // Navigation routes
   const navigation = [
     { path: "/", label: "Overview", Icon: LayoutDashboard },
+    {
+      path: "/leads",
+      label: "Leads & CRM",
+      Icon: Users,
+      badge: pendingLeadsCount > 0 ? pendingLeadsCount : null,
+    },
     {
       path: "/followups",
       label: "Visits & Follow-ups",
