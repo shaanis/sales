@@ -1,12 +1,9 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
 import {
   Users,
   Phone,
   PhoneCall,
-  PhoneForwarded,
-  PhoneOff,
-  PhoneIncoming,
-  PhoneMissed,
   MessageCircle,
   Calendar,
   CalendarClock,
@@ -38,6 +35,13 @@ import {
   Building2,
   CalendarDays,
   Tag,
+  Flame,
+  ArrowUpDown,
+  RotateCw,
+  FileText,
+  MessageSquare,
+  CheckCircle,
+  SlidersHorizontal,
 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
@@ -52,6 +56,7 @@ import {
   CALL_STATUSES,
   VISIT_STATUSES,
   LEAD_SOURCES,
+  ACTION_TYPES,
   COMMON_SECTIONS,
   QUICK_UPDATE_SNIPPETS,
   blankLead,
@@ -59,7 +64,6 @@ import {
   generateLeadWhatsAppUrl,
 } from "./leadsModel";
 import {
-  generateGoogleCalendarUrl,
   scheduleExactAlarms,
   formatTime,
 } from "../followups/notificationHelper";
@@ -73,12 +77,16 @@ export default function LeadsPage() {
   const { user } = useAuth();
 
   const [leads, setLeads] = useState([]);
+  const [followups, setFollowups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState({ text: "", type: "info" });
 
   // View mode: 'table' or 'board'
   const [viewMode, setViewMode] = useState("table");
+
+  // Sorting: 'visits_first' | 'newest' | 'calls_pending' | 'alphabetical'
+  const [sortBy, setSortBy] = useState("visits_first");
 
   // Filters & search
   const [search, setSearch] = useState("");
@@ -104,10 +112,12 @@ export default function LeadsPage() {
   const [callOutcome, setCallOutcome] = useState("Connected");
   const [callNotes, setCallNotes] = useState("");
 
-  const [visitModalLead, setVisitModalLead] = useState(null);
-  const [visitDate, setVisitDate] = useState(todayString());
-  const [visitTime, setVisitTime] = useState("11:00");
-  const [visitNotes, setVisitNotes] = useState("");
+  // Action / Site Visit / Follow-up Schedule Modal
+  const [actionModalLead, setActionModalLead] = useState(null);
+  const [actionType, setActionType] = useState("Site Visit");
+  const [actionDate, setActionDate] = useState(todayString());
+  const [actionTime, setActionTime] = useState("11:00");
+  const [actionNotes, setActionNotes] = useState("");
   const [syncToFollowups, setSyncToFollowups] = useState(true);
 
   const [updateModalLead, setUpdateModalLead] = useState(null);
@@ -118,20 +128,32 @@ export default function LeadsPage() {
     setTimeout(() => setNote({ text: "", type: "info" }), 5000);
   };
 
-  // Load leads
-  const loadLeads = useCallback(async () => {
+  // Load leads and follow-ups from cloud
+  const loadAllData = useCallback(async () => {
     if (!user?.uid) {
       setLeads([]);
+      setFollowups([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
-      const records = await listRecords(user.uid, COLLECTION);
-      setLeads(Array.isArray(records) ? records : []);
+      const [leadRecords, followupRecords] = await Promise.all([
+        listRecords(user.uid, COLLECTION),
+        listRecords(user.uid, FOLLOWUPS_COLLECTION).catch(() => []),
+      ]);
+
+      const lList = Array.isArray(leadRecords) ? leadRecords : [];
+      const fList = Array.isArray(followupRecords) ? followupRecords : [];
+
+      setLeads(lList);
+      setFollowups(fList);
+
+      // Register alarms for follow-ups
+      scheduleExactAlarms(fList);
     } catch (err) {
-      console.error("Failed to load leads:", err);
+      console.error("Failed to load leads/followups:", err);
       showNotification("Could not load leads from cloud.", "error");
     } finally {
       setLoading(false);
@@ -139,8 +161,8 @@ export default function LeadsPage() {
   }, [user?.uid]);
 
   useEffect(() => {
-    loadLeads();
-  }, [loadLeads]);
+    loadAllData();
+  }, [loadAllData]);
 
   // Handle parsing text in Import Modal
   useEffect(() => {
@@ -174,7 +196,7 @@ export default function LeadsPage() {
           siteVisitTime: item.siteVisitTime || "",
           siteVisitAddress: item.section || "",
           currentUpdate: item.currentUpdate || "Imported lead",
-          requirement: item.requirement || "5 kW Solar On-Grid",
+          requirement: item.requirement || "",
           assignedTo: item.assignedTo || importAssign,
           generatedMonth:
             item.generatedMonth ||
@@ -199,7 +221,7 @@ export default function LeadsPage() {
       setShowImportModal(false);
       setImportText("");
       setParsedLeads([]);
-      loadLeads();
+      loadAllData();
     } catch (err) {
       console.error("Import error:", err);
       showNotification(`Import failed: ${err.message}`, "error");
@@ -257,7 +279,7 @@ export default function LeadsPage() {
       setShowLeadModal(false);
       setEditingId(null);
       setLeadForm(blankLead(user));
-      loadLeads();
+      loadAllData();
     } catch (err) {
       console.error("Save lead error:", err);
       showNotification(`Save failed: ${err.message}`, "error");
@@ -325,60 +347,143 @@ export default function LeadsPage() {
     }
   }
 
-  // Quick Action: Schedule Site Visit
-  async function handleScheduleVisitSubmit(e) {
-    e.preventDefault();
-    if (!user?.uid || !visitModalLead) return;
+  // Open Action / Appointment Modal (Pre-fills existing reminder if available)
+  const openActionModal = (lead, defaultType = "Site Visit") => {
+    if (!lead) return;
+    const existing = followups.find(
+      (f) =>
+        (f.leadId && f.leadId === lead.id) ||
+        (f.phone &&
+          lead.phone &&
+          f.phone.replace(/\D/g, "") === lead.phone.replace(/\D/g, "") &&
+          f.status !== "Completed" &&
+          f.status !== "Cancelled")
+    );
 
-    if (!visitDate) {
-      showNotification("Please select a date for the site visit.", "error");
+    setActionModalLead(lead);
+    if (existing) {
+      setActionType(existing.type || defaultType);
+      setActionDate(existing.date || lead.siteVisitDate || todayString());
+      setActionTime(existing.time || lead.siteVisitTime || "11:00");
+      setActionNotes(existing.notes || lead.siteVisitNotes || "");
+    } else {
+      setActionType(defaultType);
+      setActionDate(lead.siteVisitDate || todayString());
+      setActionTime(lead.siteVisitTime || "11:00");
+      setActionNotes(lead.siteVisitNotes || "");
+    }
+  };
+
+  // Quick Action: Schedule or Update Visit/Follow-up Action
+  async function handleScheduleActionSubmit(e) {
+    e.preventDefault();
+    if (!user?.uid || !actionModalLead) return;
+
+    if (!actionDate) {
+      showNotification("Please select an appointment date.", "error");
       return;
     }
 
     setSaving(true);
     try {
-      const formattedTimeStr = visitTime ? ` at ${formatTime(visitTime)}` : "";
-      const newUpdate = `📅 Site Visit Scheduled on ${visitDate}${formattedTimeStr} (${visitModalLead.section || "Site"})${visitNotes ? " - " + visitNotes : ""}`;
+      const formattedTimeStr = actionTime ? ` at ${formatTime(actionTime)}` : "";
+      const isVisit = actionType === "Site Visit" || actionType === "Re-visit";
+      const newUpdate = `📅 ${actionType} Scheduled on ${actionDate}${formattedTimeStr} (${actionModalLead.section || "Site"})${actionNotes ? " - " + actionNotes : ""}`;
 
       const updatedHistory = [
-        ...(visitModalLead.updates || []),
+        ...(actionModalLead.updates || []),
         {
-          id: "visit_" + Date.now(),
+          id: "act_" + Date.now(),
           text: newUpdate,
           date: new Date().toISOString(),
           by: user.displayName || "Sales rep",
         },
       ];
 
-      const payload = {
-        visitStatus: "Scheduled",
-        siteVisitDate: visitDate,
-        siteVisitTime: visitTime || "11:00",
-        siteVisitNotes: visitNotes.trim(),
-        status: "Visit_Scheduled",
+      const leadPayload = {
+        ...(isVisit
+          ? {
+              visitStatus: "Scheduled",
+              siteVisitDate: actionDate,
+              siteVisitTime: actionTime || "11:00",
+              siteVisitNotes: actionNotes.trim(),
+              status: "Visit_Scheduled",
+            }
+          : {}),
         currentUpdate: newUpdate,
         updates: updatedHistory,
       };
 
-      await updateRecord(user.uid, COLLECTION, visitModalLead.id, payload);
+      await updateRecord(user.uid, COLLECTION, actionModalLead.id, leadPayload);
 
-      // Auto create a Follow-up record in 'followups' collection
+      // Auto create or update existing record in 'followups' collection (Fixes duplicate reminders!)
+      let wasExistingUpdated = false;
       if (syncToFollowups) {
         try {
           const followupPayload = {
-            name: visitModalLead.name,
-            phone: visitModalLead.phone,
-            area: visitModalLead.section || "",
-            date: visitDate,
-            time: visitTime || "11:00",
-            type: "Site Visit",
-            requirement: visitModalLead.requirement || "5 kW Solar On-Grid",
+            name: actionModalLead.name,
+            phone: actionModalLead.phone,
+            area: actionModalLead.section || "",
+            date: actionDate,
+            time: actionTime || "11:00",
+            type: actionType,
+            requirement: actionModalLead.requirement || "",
             status: "Scheduled",
-            notes: `Lead source: ${visitModalLead.source || "Company"}. ${visitNotes || ""}`.trim(),
-            leadId: visitModalLead.id,
+            notes: `${actionType} for ${actionModalLead.name}. ${actionNotes || ""}`.trim(),
+            leadId: actionModalLead.id,
             ownerUid: user.uid,
           };
-          await addRecord(user.uid, FOLLOWUPS_COLLECTION, followupPayload);
+
+          // Find ALL active follow-ups for this lead
+          const existingMatches = followups.filter(
+            (f) =>
+              (f.leadId && f.leadId === actionModalLead.id) ||
+              (f.phone &&
+                actionModalLead.phone &&
+                f.phone.replace(/\D/g, "") === actionModalLead.phone.replace(/\D/g, "") &&
+                f.status !== "Completed" &&
+                f.status !== "Cancelled")
+          );
+
+          let updatedFollowupsList;
+          if (existingMatches.length > 0) {
+            wasExistingUpdated = true;
+            // Update the primary existing reminder
+            const primary = existingMatches[0];
+            await updateRecord(
+              user.uid,
+              FOLLOWUPS_COLLECTION,
+              primary.id,
+              followupPayload
+            );
+
+            // Clean up any accidental duplicate records from previous runs
+            for (let i = 1; i < existingMatches.length; i++) {
+              try {
+                await deleteRecord(user.uid, FOLLOWUPS_COLLECTION, existingMatches[i].id);
+              } catch (delErr) {
+                console.warn("Could not delete duplicate followup:", delErr);
+              }
+            }
+
+            const duplicateIds = new Set(existingMatches.slice(1).map((m) => m.id));
+            updatedFollowupsList = followups
+              .filter((f) => !duplicateIds.has(f.id))
+              .map((f) =>
+                f.id === primary.id ? { ...f, ...followupPayload } : f
+              );
+          } else {
+            // Create a single new reminder
+            const newFollowup = await addRecord(
+              user.uid,
+              FOLLOWUPS_COLLECTION,
+              followupPayload
+            );
+            updatedFollowupsList = [newFollowup, ...followups];
+          }
+
+          setFollowups(updatedFollowupsList);
+          scheduleExactAlarms(updatedFollowupsList);
         } catch (fErr) {
           console.warn("Could not sync to followups:", fErr);
         }
@@ -386,19 +491,21 @@ export default function LeadsPage() {
 
       setLeads((prev) =>
         prev.map((l) =>
-          l.id === visitModalLead.id ? { ...l, ...payload } : l
+          l.id === actionModalLead.id ? { ...l, ...leadPayload } : l
         )
       );
 
       showNotification(
-        `Site visit scheduled for ${visitModalLead.name} on ${visitDate}!`,
+        wasExistingUpdated
+          ? `Updated existing appointment for ${actionModalLead.name} to ${actionDate} (${actionTime || "11:00"})!`
+          : `${actionType} scheduled for ${actionModalLead.name} on ${actionDate}!`,
         "success"
       );
-      setVisitModalLead(null);
-      setVisitNotes("");
+      setActionModalLead(null);
+      setActionNotes("");
     } catch (err) {
-      console.error("Schedule visit error:", err);
-      showNotification("Could not schedule site visit.", "error");
+      console.error("Schedule action error:", err);
+      showNotification("Could not schedule appointment.", "error");
     } finally {
       setSaving(false);
     }
@@ -452,7 +559,7 @@ export default function LeadsPage() {
       const stageObj = LEAD_STAGES.find((s) => s.id === newStage);
       const stageLabel = stageObj ? stageObj.label : newStage;
 
-      const newUpdate = `Stage changed to: ${stageLabel}`;
+      const newUpdate = `Stage moved to: ${stageLabel}`;
       const updatedHistory = [
         ...(lead.updates || []),
         {
@@ -479,6 +586,86 @@ export default function LeadsPage() {
     }
   }
 
+  // 1-Click Advance to Next Stage
+  async function handleAdvanceStage(lead) {
+    if (!user?.uid || !lead?.id) return;
+    const stageOrder = ["New", "Contacted", "Visit_Scheduled", "Visited", "Proposal", "Won"];
+    const currentIdx = stageOrder.indexOf(lead.status);
+    if (currentIdx === -1 || currentIdx >= stageOrder.length - 1) {
+      showNotification("Lead is already at final stage.", "info");
+      return;
+    }
+    const nextStage = stageOrder[currentIdx + 1];
+    await handleStageChange(lead, nextStage);
+  }
+
+  // Complete a Today Plan Item (synchronizes Followups + Leads)
+  async function handleCompleteTodayPlan(plan) {
+    if (!user?.uid || !plan) return;
+    setSaving(true);
+    try {
+      const completedTimestamp = new Date().toISOString();
+      const nextStatus = plan.status === "Completed" ? "Scheduled" : "Completed";
+      const isCompleted = nextStatus === "Completed";
+
+      // 1. If it's an existing followups record, update it
+      if (plan.isFollowupRecord && plan.followupId) {
+        await updateRecord(user.uid, FOLLOWUPS_COLLECTION, plan.followupId, {
+          status: nextStatus,
+          completedAt: isCompleted ? completedTimestamp : null,
+        });
+        setFollowups((prev) =>
+          prev.map((f) =>
+            f.id === plan.followupId ? { ...f, status: nextStatus } : f
+          )
+        );
+      }
+
+      // 2. If it's linked to a lead, update CRM lead
+      if (plan.leadId) {
+        const targetLead = leads.find((l) => l.id === plan.leadId);
+        const isVisit = plan.type === "Site Visit" || plan.type === "Re-visit";
+        const newUpdateText = isCompleted
+          ? `✅ Completed ${plan.type} scheduled for today`
+          : `Re-opened ${plan.type}`;
+
+        const leadUpdate = {
+          visitStatus: isCompleted ? "Completed" : "Scheduled",
+          ...(isCompleted && isVisit ? { status: "Visited" } : {}),
+          currentUpdate: newUpdateText,
+          updates: [
+            ...(targetLead?.updates || []),
+            {
+              id: "comp_" + Date.now(),
+              text: newUpdateText,
+              date: completedTimestamp,
+              by: user.displayName || "Sales rep",
+            },
+          ],
+        };
+
+        await updateRecord(user.uid, COLLECTION, plan.leadId, leadUpdate);
+        setLeads((prev) =>
+          prev.map((l) =>
+            l.id === plan.leadId ? { ...l, ...leadUpdate } : l
+          )
+        );
+      }
+
+      showNotification(
+        isCompleted
+          ? `Marked "${plan.name}" (${plan.type}) completed for today! 🎉`
+          : `Re-opened "${plan.name}" (${plan.type}).`,
+        "success"
+      );
+    } catch (err) {
+      console.error("Complete today plan error:", err);
+      showNotification("Could not update task status.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   // Delete Lead
   async function handleDeleteLead(lead) {
     if (!user?.uid || !lead?.id) return;
@@ -488,6 +675,32 @@ export default function LeadsPage() {
     try {
       await deleteRecord(user.uid, COLLECTION, lead.id);
       setLeads((prev) => prev.filter((l) => l.id !== lead.id));
+
+      // Also remove associated reminder from followups collection
+      const associatedFollowups = followups.filter(
+        (f) =>
+          f.leadId === lead.id ||
+          (f.phone &&
+            lead.phone &&
+            f.phone.replace(/\D/g, "") === lead.phone.replace(/\D/g, ""))
+      );
+      for (const af of associatedFollowups) {
+        try {
+          await deleteRecord(user.uid, FOLLOWUPS_COLLECTION, af.id);
+        } catch (delErr) {
+          console.warn("Could not delete associated followup:", delErr);
+        }
+      }
+      setFollowups((prev) =>
+        prev.filter(
+          (f) =>
+            f.leadId !== lead.id &&
+            (!lead.phone ||
+              !f.phone ||
+              f.phone.replace(/\D/g, "") !== lead.phone.replace(/\D/g, ""))
+        )
+      );
+
       showNotification("Lead removed from system.", "info");
     } catch (err) {
       console.error("Delete error:", err);
@@ -513,10 +726,11 @@ export default function LeadsPage() {
       "SITE VISIT DATE",
       "CURRENT UPDATE",
       "ASSIGNED TO",
+      "SOLAR REQUIREMENT",
       "GENERATED",
     ];
 
-    const rows = filteredLeads.map((l) => [
+    const rows = sortedFilteredLeads.map((l) => [
       `"${(l.source || "").replace(/"/g, '""')}"`,
       `"${(l.status || "").replace(/"/g, '""')}"`,
       `"${(l.name || "").replace(/"/g, '""')}"`,
@@ -527,6 +741,7 @@ export default function LeadsPage() {
       `"${(l.siteVisitDate ? `${l.siteVisitDate} ${l.siteVisitTime || ""}` : "").replace(/"/g, '""')}"`,
       `"${(l.currentUpdate || "").replace(/"/g, '""')}"`,
       `"${(l.assignedTo || "").replace(/"/g, '""')}"`,
+      `"${(l.requirement || "").replace(/"/g, '""')}"`,
       `"${(l.generatedMonth || "").replace(/"/g, '""')}"`,
     ]);
 
@@ -555,6 +770,84 @@ export default function LeadsPage() {
     return Array.from(set).sort();
   }, [leads]);
 
+  // Distinct sources list (Combines default + any custom entered sources)
+  const allSourcesList = useMemo(() => {
+    const set = new Set(LEAD_SOURCES);
+    leads.forEach((l) => {
+      if (l.source && l.source.trim()) set.add(l.source.trim());
+    });
+    return Array.from(set);
+  }, [leads]);
+
+  const today = todayString();
+
+  // TODAY'S ACTION PLANS (Site Visits, Follow-up Calls, Document Collection, Re-visits)
+  const todayPlans = useMemo(() => {
+    const plans = [];
+
+    // 1. From followups collection for today
+    followups.forEach((f) => {
+      if (f.date === today && f.status !== "Cancelled") {
+        plans.push({
+          id: f.id,
+          isFollowupRecord: true,
+          followupId: f.id,
+          leadId: f.leadId,
+          name: f.name || "Customer",
+          phone: f.phone || "",
+          area: f.area || "",
+          time: f.time || "10:00",
+          type: f.type || "Site Visit",
+          status: f.status || "Scheduled",
+          notes: f.notes || "",
+          requirement: f.requirement || "",
+        });
+      }
+    });
+
+    // 2. From leads with siteVisitDate === today (deduplicating if already linked)
+    leads.forEach((l) => {
+      if (
+        l.siteVisitDate === today &&
+        l.status !== "Lost" &&
+        !plans.some(
+          (p) => p.leadId === l.id || (p.phone && p.phone === l.phone)
+        )
+      ) {
+        plans.push({
+          id: "lead_visit_" + l.id,
+          isFollowupRecord: false,
+          leadId: l.id,
+          name: l.name,
+          phone: l.phone,
+          area: l.section,
+          time: l.siteVisitTime || "11:00",
+          type: "Site Visit",
+          status: l.visitStatus === "Completed" ? "Completed" : "Scheduled",
+          notes: l.siteVisitNotes || l.currentUpdate || "",
+          requirement: l.requirement || "",
+        });
+      }
+    });
+
+    // Sort: PENDING items FIRST, Completed items at the bottom
+    return plans.sort((a, b) => {
+      const aDone = a.status === "Completed" ? 1 : 0;
+      const bDone = b.status === "Completed" ? 1 : 0;
+      if (aDone !== bDone) return aDone - bDone;
+      return (a.time || "").localeCompare(b.time || "");
+    });
+  }, [followups, leads, today]);
+
+  const pendingTodayPlans = useMemo(
+    () => todayPlans.filter((p) => p.status !== "Completed"),
+    [todayPlans]
+  );
+  const completedTodayPlans = useMemo(
+    () => todayPlans.filter((p) => p.status === "Completed"),
+    [todayPlans]
+  );
+
   // Filtered Leads
   const filteredLeads = useMemo(() => {
     let list = [...leads];
@@ -563,7 +856,12 @@ export default function LeadsPage() {
     if (stageFilter === "call_pending") {
       list = list.filter((l) => l.callStatus === "Pending");
     } else if (stageFilter === "visits_due") {
-      list = list.filter((l) => l.status === "Visit_Scheduled");
+      list = list.filter(
+        (l) =>
+          l.status === "Visit_Scheduled" ||
+          l.visitStatus === "Scheduled" ||
+          (l.siteVisitDate && l.siteVisitDate >= today)
+      );
     } else if (stageFilter !== "all") {
       list = list.filter((l) => l.status === stageFilter);
     }
@@ -610,14 +908,70 @@ export default function LeadsPage() {
     sectionFilter,
     callStatusFilter,
     search,
+    today,
   ]);
+
+  // Sort Filtered Leads with High Priority for Scheduled Visits
+  const sortedFilteredLeads = useMemo(() => {
+    const list = [...filteredLeads];
+
+    if (sortBy === "visits_first") {
+      list.sort((a, b) => {
+        // Priority Scoring:
+        // 4: Scheduled Visit TODAY
+        // 3: Scheduled Visit in FUTURE
+        // 2: Visit Scheduled stage
+        // 1: Call Pending
+        // 0: General
+        const getScore = (lead) => {
+          const vDate = lead.siteVisitDate;
+          const isVisitFixed =
+            lead.status === "Visit_Scheduled" || lead.visitStatus === "Scheduled";
+          if (vDate === today && isVisitFixed) return 4;
+          if (vDate && vDate > today && isVisitFixed) return 3;
+          if (isVisitFixed) return 2;
+          if (lead.callStatus === "Pending") return 1;
+          return 0;
+        };
+
+        const scoreA = getScore(a);
+        const scoreB = getScore(b);
+
+        if (scoreA !== scoreB) {
+          return scoreB - scoreA; // Highest score first
+        }
+
+        // If both have visit dates, sort by date & time
+        if (a.siteVisitDate && b.siteVisitDate && a.siteVisitDate !== b.siteVisitDate) {
+          return a.siteVisitDate.localeCompare(b.siteVisitDate);
+        }
+
+        return (a.name || "").localeCompare(b.name || "");
+      });
+    } else if (sortBy === "newest") {
+      list.reverse();
+    } else if (sortBy === "calls_pending") {
+      list.sort((a, b) => {
+        const aP = a.callStatus === "Pending" ? 1 : 0;
+        const bP = b.callStatus === "Pending" ? 1 : 0;
+        return bP - aP;
+      });
+    } else if (sortBy === "alphabetical") {
+      list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    }
+
+    return list;
+  }, [filteredLeads, sortBy, today]);
 
   // Statistics
   const stats = useMemo(() => {
     const total = leads.length;
     const callPending = leads.filter((l) => l.callStatus === "Pending").length;
     const visitsScheduled = leads.filter(
-      (l) => l.status === "Visit_Scheduled" || l.visitStatus === "Scheduled"
+      (l) =>
+        l.status === "Visit_Scheduled" ||
+        l.visitStatus === "Scheduled" ||
+        (l.siteVisitDate && l.siteVisitDate >= today)
     ).length;
     const visitsDone = leads.filter(
       (l) => l.status === "Visited" || l.visitStatus === "Completed"
@@ -626,26 +980,67 @@ export default function LeadsPage() {
     const lost = leads.filter((l) => l.status === "Lost").length;
 
     return { total, callPending, visitsScheduled, visitsDone, won, lost };
-  }, [leads]);
+  }, [leads, today]);
+
+  // WhatsApp generator for today's appointment
+  function generateTodayAppointmentWa(plan) {
+    if (!plan?.phone) return "";
+    const phone = plan.phone.replace(/\D/g, "");
+    const formattedPhone = phone.length === 10 ? `91${phone}` : phone;
+    const timeStr = plan.time ? ` at ${formatTime(plan.time)}` : "";
+    const rep = user?.displayName || "ECHONIX Solar";
+    const name = plan.name ? `${plan.name} Sir` : "Sir";
+    const place = plan.area ? ` at ${plan.area}` : "";
+
+    const msg = `Hello ${name},
+Greetings from *ECHONIX Solar*! ☀️
+This is ${rep}.
+
+Checking in regarding our scheduled *${plan.type}* today (${today})${timeStr}${place}.
+
+Looking forward to meeting you! Please let me know if any adjustment in timing is required.
+
+Thank you!
+*ECHONIX Solar Solutions*`;
+
+    return `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(
+      msg
+    )}`;
+  }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-16 font-sans">
+    <div className="max-w-7xl mx-auto space-y-6 pb-20 font-sans px-2 sm:px-4">
       {/* Page Header */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold uppercase tracking-wider text-teal-700 bg-teal-50">
-            <Users size={13} />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-teal-800 bg-teal-50 border border-teal-200">
+            <Users size={13} className="text-teal-600" />
             ECHONIX Lead Pipeline & CRM
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mt-2">
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-2 flex items-center gap-2">
             Lead Management System
           </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Track incoming leads from WhatsApp & Sheets, monitor First Calls, schedule Site Visits, and keep live updates.
+          <p className="text-slate-500 text-xs sm:text-sm mt-1">
+            Priority tracking for Site Visits, Today&apos;s appointments, WhatsApp lead imports, and live status updates.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Quick link to Site Visits & Reminders */}
+          <Link
+            to="/followups"
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-amber-500 text-white hover:bg-amber-600 shadow-sm transition"
+            title="Open Site Visits & Reminders Calendar"
+          >
+            <CalendarClock size={16} />
+            <span>Visits & Reminders</span>
+            {todayPlans.length > 0 && (
+              <span className="bg-white text-amber-900 px-1.5 py-0.2 rounded-full text-[11px] font-black">
+                {todayPlans.length}
+              </span>
+            )}
+          </Link>
+
           {/* Smart WhatsApp/Text Import Button */}
           <button
             type="button"
@@ -656,7 +1051,7 @@ export default function LeadsPage() {
             className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-teal-700 text-white hover:bg-teal-800 shadow-md shadow-teal-700/20 transition"
           >
             <ClipboardPaste size={16} />
-            <span>Smart Import (WhatsApp / Sheet)</span>
+            <span>Smart Import</span>
           </button>
 
           {/* Manual Add Lead Button */}
@@ -670,14 +1065,14 @@ export default function LeadsPage() {
             className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm"
           >
             <Plus size={16} />
-            <span>Add Single Lead</span>
+            <span>Add Lead</span>
           </button>
 
           {/* Export to CSV */}
           <button
             type="button"
             onClick={exportToCSV}
-            title="Export filtered leads to CSV"
+            title="Export filtered leads to CSV spreadsheet"
             className="inline-flex items-center justify-center p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition"
           >
             <Download size={16} />
@@ -688,7 +1083,7 @@ export default function LeadsPage() {
       {/* Notification Toast */}
       {note.text && (
         <div
-          className={`p-4 rounded-xl text-sm font-semibold flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-200 ${
+          className={`p-4 rounded-2xl text-sm font-bold flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-200 ${
             note.type === "error"
               ? "bg-rose-50 text-rose-800 border border-rose-200"
               : note.type === "success"
@@ -705,107 +1100,241 @@ export default function LeadsPage() {
           <button
             type="button"
             onClick={() => setNote({ text: "", type: "info" })}
-            className="text-slate-400 hover:text-slate-600"
+            className="text-slate-400 hover:text-slate-600 p-1"
           >
             <X size={15} />
           </button>
         </div>
       )}
 
-      {/* Top Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div
-          onClick={() => setStageFilter("all")}
-          className={`cursor-pointer rounded-2xl p-4 border transition ${
-            stageFilter === "all"
-              ? "bg-slate-900 text-white border-slate-900 shadow-md"
-              : "bg-white text-slate-800 border-slate-200 hover:border-slate-300"
-          }`}
-        >
-          <p className="text-[11px] font-bold uppercase tracking-wider opacity-75">
-            Total Leads
-          </p>
-          <p className="text-2xl font-black mt-1">{stats.total}</p>
+      {/* ===============================================================
+          TODAY'S SCHEDULE & ACTION PLAN (MINIMAL, PENDING FIRST ON TOP)
+      =============================================================== */}
+      <section className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
+              <CalendarClock size={16} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900">
+                  Today&apos;s Action Plan
+                </h2>
+                {pendingTodayPlans.length > 0 ? (
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-200">
+                    {pendingTodayPlans.length} Pending
+                  </span>
+                ) : (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                    All Done
+                  </span>
+                )}
+                {completedTodayPlans.length > 0 && (
+                  <span className="text-xs font-medium text-slate-400">
+                    • {completedTodayPlans.length} Completed
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Visits, calls, and actions scheduled for today ({today}).
+              </p>
+            </div>
+          </div>
+
+          <Link
+            to="/followups"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition shrink-0 self-start sm:self-auto"
+          >
+            <span>Open Reminders</span>
+            <ArrowRight size={13} />
+          </Link>
         </div>
 
-        <div
-          onClick={() => setStageFilter("call_pending")}
-          className={`cursor-pointer rounded-2xl p-4 border transition ${
-            stageFilter === "call_pending"
-              ? "bg-amber-500 text-white border-amber-500 shadow-md"
-              : "bg-amber-50 text-amber-900 border-amber-200 hover:border-amber-300"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold uppercase tracking-wider opacity-90">
-              Call Pending
-            </p>
-            {stats.callPending > 0 && (
-              <span className="flex h-2 w-2 rounded-full bg-amber-600 animate-ping" />
+        {todayPlans.length === 0 ? (
+          <div className="py-4 px-4 bg-slate-50/70 rounded-2xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <span className="text-slate-500 font-medium">
+              No visits or follow-ups scheduled for today.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                if (leads.length > 0) {
+                  openActionModal(leads[0], "Site Visit");
+                } else {
+                  setShowLeadModal(true);
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition shrink-0"
+            >
+              <Plus size={13} />
+              <span>Schedule for Today</span>
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* PENDING ITEMS - SHOWN FIRST AT THE VERY TOP */}
+            {pendingTodayPlans.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {pendingTodayPlans.map((plan) => {
+                  const planWa = generateTodayAppointmentWa(plan);
+
+                  return (
+                    <div
+                      key={plan.id}
+                      className="p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-slate-300 shadow-xs transition flex flex-col justify-between gap-3"
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider bg-slate-100 text-slate-800 border border-slate-200">
+                            {plan.type}
+                          </span>
+
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                            <Clock size={11} />
+                            {plan.time ? formatTime(plan.time) : "Today"}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h4 className="font-bold text-sm text-slate-900">
+                            {plan.name}
+                          </h4>
+                          {plan.area && (
+                            <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5 font-medium">
+                              <MapPin size={11} className="text-slate-400 shrink-0" />
+                              <span>{plan.area}</span>
+                            </p>
+                          )}
+                        </div>
+
+                        {plan.notes && (
+                          <p className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100 line-clamp-2">
+                            {plan.notes}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Quick Actions */}
+                      <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100">
+                        {plan.phone && (
+                          <a
+                            href={`tel:${plan.phone}`}
+                            title={`Call ${plan.name} (${plan.phone})`}
+                            className="p-2 rounded-xl text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition"
+                          >
+                            <Phone size={13} />
+                          </a>
+                        )}
+
+                        {plan.phone && planWa && (
+                          <a
+                            href={planWa}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="WhatsApp reminder"
+                            className="p-2 rounded-xl text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition"
+                          >
+                            <MessageCircle size={13} />
+                          </a>
+                        )}
+
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => handleCompleteTodayPlan(plan)}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition shadow-xs"
+                        >
+                          <CheckCircle2 size={13} />
+                          <span>Mark Done</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* COMPLETED ITEMS - SHOWN AT THE BOTTOM IN MUTED CLEAN FOLD */}
+            {completedTodayPlans.length > 0 && (
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  Completed Today ({completedTodayPlans.length})
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {completedTodayPlans.map((plan) => (
+                    <div
+                      key={plan.id}
+                      className="p-2.5 rounded-xl border border-slate-200 bg-slate-50/60 text-slate-400 flex items-center justify-between gap-2 text-xs"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <CheckCircle2 size={13} className="text-teal-600 shrink-0" />
+                        <span className="font-semibold line-through truncate text-slate-500">
+                          {plan.name}
+                        </span>
+                        <span className="text-[10px] text-slate-400 shrink-0">
+                          ({plan.type})
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCompleteTodayPlan(plan)}
+                        className="text-[10px] text-slate-400 hover:text-slate-600 underline shrink-0 font-medium"
+                      >
+                        Re-open
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
-          <p className="text-2xl font-black mt-1">{stats.callPending}</p>
-        </div>
+        )}
+      </section>
 
-        <div
-          onClick={() => setStageFilter("visits_due")}
-          className={`cursor-pointer rounded-2xl p-4 border transition ${
-            stageFilter === "visits_due"
-              ? "bg-teal-600 text-white border-teal-600 shadow-md"
-              : "bg-teal-50 text-teal-900 border-teal-200 hover:border-teal-300"
-          }`}
-        >
-          <p className="text-[11px] font-bold uppercase tracking-wider opacity-90">
-            Visits Fixed
-          </p>
-          <p className="text-2xl font-black mt-1">{stats.visitsScheduled}</p>
-        </div>
-
-        <div
-          onClick={() => setStageFilter("Visited")}
-          className={`cursor-pointer rounded-2xl p-4 border transition ${
-            stageFilter === "Visited"
-              ? "bg-blue-600 text-white border-blue-600 shadow-md"
-              : "bg-blue-50 text-blue-900 border-blue-200 hover:border-blue-300"
-          }`}
-        >
-          <p className="text-[11px] font-bold uppercase tracking-wider opacity-90">
-            Survey Done
-          </p>
-          <p className="text-2xl font-black mt-1">{stats.visitsDone}</p>
-        </div>
-
-        <div
-          onClick={() => setStageFilter("Won")}
-          className={`cursor-pointer rounded-2xl p-4 border transition ${
-            stageFilter === "Won"
-              ? "bg-emerald-600 text-white border-emerald-600 shadow-md"
-              : "bg-emerald-50 text-emerald-900 border-emerald-200 hover:border-emerald-300"
-          }`}
-        >
-          <p className="text-[11px] font-bold uppercase tracking-wider opacity-90">
-            Closed Won 🏆
-          </p>
-          <p className="text-2xl font-black mt-1">{stats.won}</p>
-        </div>
-
-        <div
-          onClick={() => setStageFilter("Lost")}
-          className={`cursor-pointer rounded-2xl p-4 border transition ${
-            stageFilter === "Lost"
-              ? "bg-rose-600 text-white border-rose-600 shadow-md"
-              : "bg-rose-50 text-rose-900 border-rose-200 hover:border-rose-300"
-          }`}
-        >
-          <p className="text-[11px] font-bold uppercase tracking-wider opacity-90">
-            Lost / Dropped
-          </p>
-          <p className="text-2xl font-black mt-1">{stats.lost}</p>
-        </div>
+      {/* Top Metric Cards - Minimal 3-Color Design (No Rainbow Clutter) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          { id: "all", label: "Total Leads", count: stats.total },
+          { id: "visits_due", label: "Visits Due", count: stats.visitsScheduled, isPriority: true },
+          { id: "call_pending", label: "Call Pending", count: stats.callPending },
+          { id: "Visited", label: "Survey Done", count: stats.visitsDone },
+          { id: "Won", label: "Closed Won", count: stats.won },
+          { id: "Lost", label: "Lost / Dropped", count: stats.lost },
+        ].map((m) => {
+          const isSelected = stageFilter === m.id;
+          return (
+            <div
+              key={m.id}
+              onClick={() => setStageFilter(m.id)}
+              className={`cursor-pointer rounded-2xl p-3.5 border transition ${
+                isSelected
+                  ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                  : m.isPriority && m.count > 0
+                  ? "bg-amber-50/60 text-amber-950 border-amber-200 hover:border-amber-300"
+                  : "bg-white text-slate-800 border-slate-200 hover:border-slate-300"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <p
+                  className={`text-[10px] font-bold uppercase tracking-wider ${
+                    isSelected ? "text-slate-300" : "text-slate-400"
+                  }`}
+                >
+                  {m.label}
+                </p>
+                {m.isPriority && m.count > 0 && !isSelected && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                )}
+              </div>
+              <p className="text-xl sm:text-2xl font-black mt-1">{m.count}</p>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Control Bar: Filters, Search & View Switcher */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+      {/* Control Bar: Filters, Search, Priority Sorting & View Switcher */}
+      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm space-y-3">
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           {/* Search Input */}
           <div className="relative flex-1">
@@ -817,8 +1346,8 @@ export default function LeadsPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by customer name, phone, section (e.g. Valancheri), update..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition"
+              placeholder="Search by customer name, phone, section (Valancheri, Tirur), update..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 transition"
             />
             {search && (
               <button
@@ -829,6 +1358,21 @@ export default function LeadsPage() {
                 <X size={15} />
               </button>
             )}
+          </div>
+
+          {/* Sort Control */}
+          <div className="flex items-center gap-1.5 shrink-0 text-xs">
+            <ArrowUpDown size={14} className="text-slate-400" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-800 focus:outline-none focus:border-teal-600 text-xs"
+            >
+              <option value="visits_first">🎯 Priority (Visits First)</option>
+              <option value="newest">🕒 Newest First</option>
+              <option value="calls_pending">⏳ Calls Pending First</option>
+              <option value="alphabetical">🔤 Name (A - Z)</option>
+            </select>
           </div>
 
           {/* View Mode Toggle */}
@@ -862,10 +1406,26 @@ export default function LeadsPage() {
 
         {/* Filter Dropdowns */}
         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
-          <span className="text-slate-400 font-semibold flex items-center gap-1 mr-1">
+          <span className="text-slate-400 font-bold flex items-center gap-1 mr-1">
             <Filter size={13} />
             Filters:
           </span>
+
+          {/* Quick Priority Button */}
+          <button
+            type="button"
+            onClick={() =>
+              setStageFilter(stageFilter === "visits_due" ? "all" : "visits_due")
+            }
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+              stageFilter === "visits_due"
+                ? "bg-amber-500 text-white border-amber-600 shadow-xs"
+                : "bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100"
+            }`}
+          >
+            <Flame size={12} />
+            <span>Priority Visits ({stats.visitsScheduled})</span>
+          </button>
 
           {/* Stage Filter */}
           <select
@@ -874,8 +1434,8 @@ export default function LeadsPage() {
             className="px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 font-medium text-slate-700 focus:outline-none focus:border-teal-600"
           >
             <option value="all">All Stages</option>
+            <option value="visits_due">📅 Site Visits Scheduled / Due</option>
             <option value="call_pending">⏳ Call Pending Only</option>
-            <option value="visits_due">📅 Site Visits Scheduled Only</option>
             {LEAD_STAGES.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.label}
@@ -883,14 +1443,14 @@ export default function LeadsPage() {
             ))}
           </select>
 
-          {/* Source Filter */}
+          {/* Source Filter (Supports custom typed sources) */}
           <select
             value={sourceFilter}
             onChange={(e) => setSourceFilter(e.target.value)}
             className="px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 font-medium text-slate-700 focus:outline-none focus:border-teal-600"
           >
             <option value="all">All Sources</option>
-            {LEAD_SOURCES.map((src) => (
+            {allSourcesList.map((src) => (
               <option key={src} value={src}>
                 {src}
               </option>
@@ -953,7 +1513,7 @@ export default function LeadsPage() {
           <Loader2 size={32} className="animate-spin mx-auto mb-3 text-teal-600" />
           <p className="text-sm font-semibold">Loading ECHONIX leads...</p>
         </div>
-      ) : filteredLeads.length === 0 ? (
+      ) : sortedFilteredLeads.length === 0 ? (
         <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 space-y-4 shadow-sm">
           <div className="w-14 h-14 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto text-teal-700">
             <Users size={28} />
@@ -982,27 +1542,28 @@ export default function LeadsPage() {
           )}
         </div>
       ) : viewMode === "table" ? (
-        /* SPREADSHEET TABLE VIEW (Matches Image 2 exactly!) */
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        /* ===============================================================
+            SPREADSHEET TABLE VIEW (RESPONSIVE & CLEAN)
+        =============================================================== */
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-800 text-slate-200 font-bold uppercase tracking-wider text-[11px] border-b border-slate-700">
-                  <th className="py-3 px-3.5 whitespace-nowrap">Source</th>
-                  <th className="py-3 px-3.5 whitespace-nowrap">Stage Status</th>
-                  <th className="py-3 px-3.5 whitespace-nowrap">Customer Name</th>
-                  <th className="py-3 px-3.5 whitespace-nowrap">Section / Area</th>
-                  <th className="py-3 px-3.5 whitespace-nowrap">Contact Details</th>
-                  <th className="py-3 px-3.5 whitespace-nowrap">Call Status</th>
-                  <th className="py-3 px-3.5 whitespace-nowrap">First Call</th>
-                  <th className="py-3 px-3.5 whitespace-nowrap">Site Visit</th>
-                  <th className="py-3 px-4 min-w-[200px]">Current Update</th>
-                  <th className="py-3 px-3.5 whitespace-nowrap">Assign</th>
-                  <th className="py-3 px-3.5 text-right whitespace-nowrap">Actions</th>
+                <tr className="bg-slate-900 text-slate-200 font-black uppercase tracking-wider text-[11px] border-b border-slate-800">
+                  <th className="py-3.5 px-3 whitespace-nowrap">Source</th>
+                  <th className="py-3.5 px-3.5 whitespace-nowrap">Stage Status</th>
+                  <th className="py-3.5 px-3.5 whitespace-nowrap">Customer Name</th>
+                  <th className="py-3.5 px-3.5 whitespace-nowrap">Section / Area</th>
+                  <th className="py-3.5 px-3.5 whitespace-nowrap">Contact Details</th>
+                  <th className="py-3.5 px-3.5 whitespace-nowrap">Call Status</th>
+                  <th className="py-3.5 px-3.5 whitespace-nowrap">Site Visit / Plan</th>
+                  <th className="py-3.5 px-4 min-w-[200px]">Current Update</th>
+                  <th className="py-3.5 px-3 whitespace-nowrap">Assign</th>
+                  <th className="py-3.5 px-3 text-right whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredLeads.map((lead) => {
+                {sortedFilteredLeads.map((lead) => {
                   const stageObj =
                     LEAD_STAGES.find((s) => s.id === lead.status) || LEAD_STAGES[0];
                   const callObj =
@@ -1010,14 +1571,30 @@ export default function LeadsPage() {
                     CALL_STATUSES[0];
                   const waUrl = generateLeadWhatsAppUrl(lead, user?.displayName);
 
+                  const isVisitToday =
+                    lead.siteVisitDate === today &&
+                    (lead.visitStatus === "Scheduled" ||
+                      lead.status === "Visit_Scheduled");
+                  const hasFutureVisit =
+                    lead.siteVisitDate &&
+                    lead.siteVisitDate > today &&
+                    (lead.visitStatus === "Scheduled" ||
+                      lead.status === "Visit_Scheduled");
+
                   return (
                     <tr
                       key={lead.id}
-                      className="hover:bg-teal-50/40 transition group"
+                      className={`transition group ${
+                        isVisitToday
+                          ? "bg-amber-50/40 border-l-4 border-l-amber-500 hover:bg-amber-50/70"
+                          : hasFutureVisit
+                          ? "border-l-4 border-l-teal-500 hover:bg-teal-50/30"
+                          : "hover:bg-slate-50"
+                      }`}
                     >
                       {/* Source */}
-                      <td className="py-3 px-3.5 whitespace-nowrap">
-                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-700 border border-slate-200">
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-slate-100 text-slate-700 border border-slate-200">
                           {lead.source || "WhatsApp"}
                         </span>
                       </td>
@@ -1029,7 +1606,7 @@ export default function LeadsPage() {
                           onChange={(e) =>
                             handleStageChange(lead, e.target.value)
                           }
-                          className={`text-[11px] font-bold px-2 py-1 rounded-lg border focus:outline-none ${stageObj.badge}`}
+                          className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border focus:outline-none transition ${stageObj.badge}`}
                         >
                           {LEAD_STAGES.map((s) => (
                             <option key={s.id} value={s.id}>
@@ -1039,13 +1616,14 @@ export default function LeadsPage() {
                         </select>
                       </td>
 
-                      {/* Name */}
+                      {/* Name & Requirement */}
                       <td className="py-3 px-3.5 whitespace-nowrap">
-                        <strong className="text-slate-900 font-bold block text-sm">
+                        <strong className="text-slate-900 font-black block text-sm">
                           {lead.name}
                         </strong>
-                        {lead.requirement && (
-                          <span className="text-[10px] text-slate-400 block">
+                        {lead.requirement && lead.requirement.trim() && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-700 bg-teal-50 px-1.5 py-0.2 rounded mt-0.5 border border-teal-200">
+                            <Zap size={9} />
                             {lead.requirement}
                           </span>
                         )}
@@ -1070,7 +1648,7 @@ export default function LeadsPage() {
                               <a
                                 href={`tel:${lead.phone}`}
                                 title={`Call ${lead.phone}`}
-                                className="p-1 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition"
+                                className="p-1 rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition"
                               >
                                 <Phone size={13} />
                               </a>
@@ -1098,32 +1676,29 @@ export default function LeadsPage() {
                             setCallNotes(lead.callNotes || "");
                           }}
                           title="Click to change or log call outcome"
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition ${callObj.badge} hover:shadow-xs`}
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition ${callObj.badge} hover:shadow-xs`}
                         >
                           <PhoneCall size={10} />
                           <span>{callObj.label}</span>
                         </button>
                       </td>
 
-                      {/* First Call Date */}
-                      <td className="py-3 px-3.5 whitespace-nowrap text-slate-600 font-medium">
-                        {lead.firstCallDate || "—"}
-                      </td>
-
-                      {/* Site Visit */}
+                      {/* Site Visit / Action */}
                       <td className="py-3 px-3.5 whitespace-nowrap">
                         {lead.siteVisitDate ? (
                           <div
-                            onClick={() => {
-                              setVisitModalLead(lead);
-                              setVisitDate(lead.siteVisitDate);
-                              setVisitTime(lead.siteVisitTime || "11:00");
-                            }}
-                            className="cursor-pointer group-hover:underline"
+                            onClick={() => openActionModal(lead, "Site Visit")}
+                            className="cursor-pointer"
                           >
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                            <span
+                              className={`inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-lg border ${
+                                isVisitToday
+                                  ? "bg-amber-500 text-white border-amber-600 animate-pulse"
+                                  : "text-amber-900 bg-amber-50 border-amber-200"
+                              }`}
+                            >
                               <CalendarClock size={11} />
-                              {lead.siteVisitDate}{" "}
+                              {isVisitToday ? "TODAY" : lead.siteVisitDate}{" "}
                               {lead.siteVisitTime
                                 ? formatTime(lead.siteVisitTime)
                                 : ""}
@@ -1132,15 +1707,10 @@ export default function LeadsPage() {
                         ) : (
                           <button
                             type="button"
-                            onClick={() => {
-                              setVisitModalLead(lead);
-                              setVisitDate(todayString());
-                              setVisitTime("11:00");
-                              setVisitNotes("");
-                            }}
-                            className="text-[11px] text-teal-700 hover:text-teal-900 font-semibold underline decoration-dashed"
+                            onClick={() => openActionModal(lead, "Site Visit")}
+                            className="text-[11px] text-amber-700 hover:text-amber-900 font-bold underline decoration-dashed"
                           >
-                            + Set Visit Time
+                            + Schedule Visit
                           </button>
                         )}
                       </td>
@@ -1149,12 +1719,12 @@ export default function LeadsPage() {
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-between gap-2 max-w-xs">
                           <p
-                            className="text-xs text-slate-700 line-clamp-2 cursor-pointer hover:text-teal-900"
+                            className="text-xs text-slate-700 line-clamp-2 cursor-pointer hover:text-teal-900 font-medium"
                             onClick={() => {
                               setUpdateModalLead(lead);
                               setUpdateText(lead.currentUpdate || "");
                             }}
-                            title="Click to view full update or add new"
+                            title="Click to view update history or post new note"
                           >
                             {lead.currentUpdate || "No update logged."}
                           </p>
@@ -1165,7 +1735,7 @@ export default function LeadsPage() {
                               setUpdateText("");
                             }}
                             title="Add update note"
-                            className="text-slate-400 hover:text-teal-700 p-1"
+                            className="text-slate-400 hover:text-teal-700 p-1 shrink-0"
                           >
                             <Pencil size={12} />
                           </button>
@@ -1173,24 +1743,19 @@ export default function LeadsPage() {
                       </td>
 
                       {/* Assigned Rep */}
-                      <td className="py-3 px-3.5 whitespace-nowrap font-medium text-slate-600">
+                      <td className="py-3 px-3 whitespace-nowrap font-medium text-slate-600">
                         {lead.assignedTo || "Ashraf"}
                       </td>
 
                       {/* Action buttons */}
-                      <td className="py-3 px-3.5 whitespace-nowrap text-right">
+                      <td className="py-3 px-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
-                          {/* Schedule Visit */}
+                          {/* Schedule Visit/Plan */}
                           <button
                             type="button"
-                            onClick={() => {
-                              setVisitModalLead(lead);
-                              setVisitDate(lead.siteVisitDate || todayString());
-                              setVisitTime(lead.siteVisitTime || "11:00");
-                              setVisitNotes(lead.siteVisitNotes || "");
-                            }}
-                            title="Schedule / update site visit"
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-700 hover:bg-amber-50 transition"
+                            onClick={() => openActionModal(lead, "Site Visit")}
+                            title="Schedule Site Visit / Follow-up"
+                            className="p-1.5 rounded-lg text-amber-700 hover:bg-amber-50 transition"
                           >
                             <Calendar size={14} />
                           </button>
@@ -1231,17 +1796,24 @@ export default function LeadsPage() {
           </div>
         </div>
       ) : (
-        /* KANBAN PIPELINE BOARD VIEW */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+        /* ===============================================================
+            KANBAN PIPELINE BOARD VIEW (RESPONSIVE & CLEAN)
+        =============================================================== */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
           {LEAD_STAGES.map((stage) => {
-            const stageLeads = filteredLeads.filter(
+            const stageLeads = sortedFilteredLeads.filter(
               (l) => l.status === stage.id
             );
+            const isVisitStage = stage.id === "Visit_Scheduled";
 
             return (
               <div
                 key={stage.id}
-                className="bg-slate-100/80 rounded-2xl p-3 border border-slate-200/80 space-y-3"
+                className={`rounded-2xl p-3.5 space-y-3 transition border ${
+                  isVisitStage
+                    ? "bg-amber-50/30 border-amber-300"
+                    : "bg-slate-50 border-slate-200"
+                }`}
               >
                 {/* Column Header */}
                 <div className="flex items-center justify-between px-1">
@@ -1251,15 +1823,21 @@ export default function LeadsPage() {
                       {stage.label}
                     </h3>
                   </div>
-                  <span className="text-xs font-bold text-slate-500 bg-white px-2 py-0.5 rounded-full border border-slate-200">
+                  <span
+                    className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
+                      isVisitStage
+                        ? "bg-amber-500 text-white border-amber-600"
+                        : "bg-white text-slate-700 border-slate-200 shadow-2xs"
+                    }`}
+                  >
                     {stageLeads.length}
                   </span>
                 </div>
 
                 {/* Cards in column */}
-                <div className="space-y-2.5 min-h-[150px]">
+                <div className="space-y-3 min-h-[160px]">
                   {stageLeads.length === 0 ? (
-                    <div className="text-center py-8 text-slate-400 text-xs">
+                    <div className="text-center py-10 text-slate-400 text-xs font-medium">
                       No leads in this stage
                     </div>
                   ) : (
@@ -1271,117 +1849,229 @@ export default function LeadsPage() {
                       const callObj =
                         CALL_STATUSES.find((c) => c.id === lead.callStatus) ||
                         CALL_STATUSES[0];
+                      const isVisitToday =
+                        lead.siteVisitDate === today &&
+                        (lead.visitStatus === "Scheduled" ||
+                          lead.status === "Visit_Scheduled");
+
+                      // Check populated data fields - only show fields that have real data
+                      const hasSection = Boolean(
+                        lead.section &&
+                          lead.section.trim() &&
+                          lead.section.trim() !== "—" &&
+                          lead.section.trim() !== "-" &&
+                          lead.section.trim().toLowerCase() !== "area not specified"
+                      );
+                      const hasRequirement = Boolean(
+                        lead.requirement &&
+                          lead.requirement.trim() &&
+                          lead.requirement.trim() !== "—" &&
+                          lead.requirement.trim() !== "-"
+                      );
+                      const hasVisit = Boolean(
+                        lead.siteVisitDate &&
+                          lead.siteVisitDate.trim() &&
+                          lead.siteVisitDate.trim() !== "—"
+                      );
+                      const hasPhone = Boolean(
+                        lead.phone &&
+                          lead.phone.trim() &&
+                          lead.phone.trim() !== "—" &&
+                          lead.phone.trim() !== "-"
+                      );
+                      const hasSource = Boolean(
+                        lead.source &&
+                          lead.source.trim() &&
+                          lead.source.trim() !== "—"
+                      );
+                      const hasCallStatus = Boolean(
+                        lead.callStatus && lead.callStatus.trim()
+                      );
+
+                      const rawUpdate = lead.currentUpdate
+                        ? lead.currentUpdate.trim()
+                        : "";
+                      const hasCurrentUpdate = Boolean(
+                        rawUpdate &&
+                          ![
+                            "no update logged.",
+                            "new lead received from company",
+                            "lead recorded in system",
+                            "—",
+                            "-",
+                          ].includes(rawUpdate.toLowerCase())
+                      );
 
                       return (
                         <div
                           key={lead.id}
-                          className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-xs hover:shadow-md transition space-y-2.5"
+                          className={`bg-white rounded-2xl p-4 border transition-all duration-150 space-y-3 shadow-xs hover:shadow-md ${
+                            isVisitToday
+                              ? "border-amber-400 ring-2 ring-amber-400/25"
+                              : "border-slate-200"
+                          }`}
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded">
-                                {lead.source || "WhatsApp"}
-                              </span>
-                              <h4 className="font-black text-slate-900 text-sm mt-1">
-                                {lead.name}
-                              </h4>
+                          {/* Top Badges (Only shown if source or callStatus is set) */}
+                          {(hasSource || hasCallStatus) && (
+                            <div className="flex items-center justify-between gap-2">
+                              {hasSource ? (
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                                  {lead.source.trim()}
+                                </span>
+                              ) : (
+                                <span />
+                              )}
+
+                              {hasCallStatus && (
+                                <span
+                                  className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border ${callObj.badge}`}
+                                >
+                                  {callObj.label}
+                                </span>
+                              )}
                             </div>
-                            <span
-                              className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border ${callObj.badge}`}
+                          )}
+
+                          {/* Customer Name & (only populated) Section/Requirement */}
+                          <div>
+                            <h4 className="font-extrabold text-slate-900 text-sm sm:text-base leading-snug">
+                              {lead.name}
+                            </h4>
+                            {(hasSection || hasRequirement) && (
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 mt-1">
+                                {hasSection && (
+                                  <span className="flex items-center gap-1 font-medium text-slate-700">
+                                    <MapPin
+                                      size={12}
+                                      className="text-teal-700 shrink-0"
+                                    />
+                                    {lead.section.trim()}
+                                  </span>
+                                )}
+                                {hasRequirement && (
+                                  <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
+                                    <Zap size={9} />
+                                    {lead.requirement.trim()}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Scheduled Site Visit Highlight - Only if scheduled */}
+                          {hasVisit && (
+                            <div
+                              onClick={() =>
+                                openActionModal(lead, "Site Visit")
+                              }
+                              className={`rounded-xl p-2.5 text-xs font-bold flex items-center justify-between cursor-pointer border transition ${
+                                isVisitToday
+                                  ? "bg-amber-500 text-white border-amber-600 shadow-xs animate-pulse"
+                                  : "bg-amber-50 text-amber-950 border-amber-200 hover:bg-amber-100"
+                              }`}
+                              title="Click to view/reschedule visit"
                             >
-                              {callObj.label}
-                            </span>
-                          </div>
-
-                          <div className="text-xs text-slate-600 space-y-1">
-                            <p className="flex items-center gap-1.5">
-                              <MapPin size={12} className="text-teal-600 shrink-0" />
-                              <strong className="text-slate-800">
-                                {lead.section || "Area not specified"}
-                              </strong>
-                            </p>
-                            <p className="flex items-center gap-1.5 font-mono">
-                              <Phone size={12} className="text-slate-400 shrink-0" />
-                              <span>{lead.phone}</span>
-                            </p>
-                          </div>
-
-                          {/* Site Visit Indicator */}
-                          {lead.siteVisitDate && (
-                            <div className="bg-amber-50 rounded-lg p-2 border border-amber-200 text-xs text-amber-900 flex items-center justify-between">
-                              <span className="flex items-center gap-1 font-bold">
-                                <CalendarClock size={12} />
-                                {lead.siteVisitDate}{" "}
-                                {lead.siteVisitTime
-                                  ? formatTime(lead.siteVisitTime)
-                                  : ""}
+                              <span className="flex items-center gap-1.5">
+                                <CalendarClock size={13} className="shrink-0" />
+                                <span>
+                                  {isVisitToday ? "TODAY" : lead.siteVisitDate}{" "}
+                                  {lead.siteVisitTime
+                                    ? formatTime(lead.siteVisitTime)
+                                    : ""}
+                                </span>
+                              </span>
+                              <span className="text-[10px] uppercase font-bold underline decoration-dashed">
+                                Edit
                               </span>
                             </div>
                           )}
 
-                          {/* Latest update preview */}
-                          {lead.currentUpdate && (
+                          {/* Phone & Quick Contact - Only if phone is provided */}
+                          {hasPhone && (
+                            <div className="flex items-center justify-between gap-2 text-xs pt-0.5">
+                              <span className="font-mono font-bold text-slate-800">
+                                {lead.phone.trim()}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <a
+                                  href={`tel:${lead.phone.trim()}`}
+                                  title={`Call ${lead.phone}`}
+                                  className="p-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition"
+                                >
+                                  <Phone size={12} />
+                                </a>
+                                <a
+                                  href={waUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="WhatsApp chat"
+                                  className="p-1.5 rounded-lg bg-teal-50 text-teal-800 hover:bg-teal-100 border border-teal-200 transition"
+                                >
+                                  <MessageCircle size={12} />
+                                </a>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Latest update snippet - Only if meaningful note exists */}
+                          {hasCurrentUpdate && (
                             <p
                               onClick={() => {
                                 setUpdateModalLead(lead);
                                 setUpdateText(lead.currentUpdate);
                               }}
-                              className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100 line-clamp-2 cursor-pointer hover:bg-slate-100"
+                              className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100 line-clamp-2 cursor-pointer hover:bg-slate-100 transition"
                               title="Click to view update history"
                             >
                               {lead.currentUpdate}
                             </p>
                           )}
 
-                          {/* Quick Action Buttons */}
-                          <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100">
-                            {lead.phone && (
-                              <a
-                                href={`tel:${lead.phone}`}
-                                title={`Call ${lead.phone}`}
-                                className="flex-1 py-1 px-2 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-center flex items-center justify-center gap-1 transition"
+                          {/* 1-Click Advance Stage Button & Actions */}
+                          <div className="flex items-center justify-between gap-1 pt-2 border-t border-slate-100 text-xs">
+                            {stage.id !== "Won" && stage.id !== "Lost" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleAdvanceStage(lead)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition shadow-xs"
+                                title="Move to next pipeline stage"
                               >
-                                <Phone size={12} />
-                                Call
-                              </a>
+                                <span>Advance</span>
+                                <ArrowRight size={12} />
+                              </button>
+                            ) : (
+                              <span className="text-[10px] font-bold text-slate-400">
+                                Final stage
+                              </span>
                             )}
-                            {lead.phone && (
-                              <a
-                                href={waUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title="WhatsApp chat"
-                                className="flex-1 py-1 px-2 rounded-lg text-xs font-bold bg-teal-50 text-teal-800 hover:bg-teal-100 text-center flex items-center justify-center gap-1 transition"
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openActionModal(lead, "Site Visit")
+                                }
+                                title="Schedule Visit"
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition"
                               >
-                                <MessageCircle size={12} />
-                                Chat
-                              </a>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setVisitModalLead(lead);
-                                setVisitDate(lead.siteVisitDate || todayString());
-                                setVisitTime(lead.siteVisitTime || "11:00");
-                                setVisitNotes(lead.siteVisitNotes || "");
-                              }}
-                              title="Schedule Visit"
-                              className="p-1 rounded-lg text-slate-500 hover:bg-slate-100"
-                            >
-                              <Calendar size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setLeadForm({ ...blankLead(user), ...lead });
-                                setEditingId(lead.id);
-                                setShowLeadModal(true);
-                              }}
-                              title="Edit"
-                              className="p-1 rounded-lg text-slate-500 hover:bg-slate-100"
-                            >
-                              <Pencil size={14} />
-                            </button>
+                                <Calendar size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLeadForm({
+                                    ...blankLead(user),
+                                    ...lead,
+                                  });
+                                  setEditingId(lead.id);
+                                  setShowLeadModal(true);
+                                }}
+                                title="Edit"
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -1402,7 +2092,7 @@ export default function LeadsPage() {
           <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto space-y-5">
             <div className="flex items-start justify-between pb-3 border-b border-slate-100">
               <div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-bold uppercase bg-teal-50 text-teal-700">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold uppercase bg-teal-50 text-teal-700">
                   <ClipboardPaste size={13} />
                   Instant Parser
                 </div>
@@ -1410,7 +2100,7 @@ export default function LeadsPage() {
                   Import Leads from WhatsApp or Sheets
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Paste raw WhatsApp text (e.g. from Sangeetha) or copy-paste rows from Excel.
+                  Paste raw WhatsApp messages or copy-paste rows from Excel / Google Sheets.
                 </p>
               </div>
               <button
@@ -1426,19 +2116,21 @@ export default function LeadsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Lead Source
+                  Lead Source (Select or Type):
                 </label>
-                <select
+                <input
+                  type="text"
+                  list="import-source-list"
                   value={importSource}
                   onChange={(e) => setImportSource(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-medium"
-                >
-                  {LEAD_SOURCES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
+                  placeholder="e.g. WhatsApp, FB Lead..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-bold"
+                />
+                <datalist id="import-source-list">
+                  {allSourcesList.map((s) => (
+                    <option key={s} value={s} />
                   ))}
-                </select>
+                </datalist>
               </div>
 
               <div>
@@ -1477,11 +2169,11 @@ export default function LeadsPage() {
                     Parsed Leads Preview ({parsedLeads.length} detected):
                   </span>
                   <span className="text-[11px] text-teal-700 font-semibold">
-                    You can edit fields inline before importing
+                    Edit fields inline before importing
                   </span>
                 </div>
 
-                <div className="border border-slate-200 rounded-xl overflow-hidden max-h-60 overflow-y-auto">
+                <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-60 overflow-y-auto">
                   <table className="w-full text-xs">
                     <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 sticky top-0">
                       <tr>
@@ -1609,7 +2301,7 @@ export default function LeadsPage() {
       )}
 
       {/* ===============================================================
-          MODAL 2: ADD / EDIT SINGLE LEAD
+          MODAL 2: ADD / EDIT SINGLE LEAD (COMBOBOX SOURCE & OPTIONAL SOLAR REQUIREMENT)
       =============================================================== */}
       {showLeadModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
@@ -1620,7 +2312,7 @@ export default function LeadsPage() {
                   {editingId ? "Edit Lead Information" : "Add New Solar Lead"}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Enter customer requirements, location, phone, and lead source.
+                  Enter customer name, phone, area, lead source, and optional solar requirement.
                 </p>
               </div>
               <button
@@ -1633,7 +2325,7 @@ export default function LeadsPage() {
             </div>
 
             <form onSubmit={handleSaveLead} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {/* Customer Name */}
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
@@ -1690,24 +2382,53 @@ export default function LeadsPage() {
                   </datalist>
                 </div>
 
-                {/* Source */}
+                {/* Lead Source: Combobox (Dropdown + Direct Typing) */}
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Lead Source
-                  </label>
-                  <select
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-slate-700">
+                      Lead Source
+                    </label>
+                    <span className="text-[10px] text-slate-400">
+                      Select or type custom
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    list="lead-source-suggestions"
                     value={leadForm.source}
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, source: e.target.value })
                     }
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-medium focus:ring-2 focus:ring-teal-500/20"
-                  >
-                    {LEAD_SOURCES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
+                    placeholder="Select or type source (e.g. Instagram, Referral)"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
+                  />
+                  <datalist id="lead-source-suggestions">
+                    {allSourcesList.map((src) => (
+                      <option key={src} value={src} />
                     ))}
-                  </select>
+                  </datalist>
+
+                  {/* Quick Source Chips */}
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {["WhatsApp", "FB LEAD", "KSEB", "REFERRAL", "DIRECT VISIT"].map(
+                      (chip) => (
+                        <button
+                          key={chip}
+                          type="button"
+                          onClick={() =>
+                            setLeadForm({ ...leadForm, source: chip })
+                          }
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border transition ${
+                            leadForm.source?.toUpperCase() === chip.toUpperCase()
+                              ? "bg-teal-700 text-white border-teal-700"
+                              : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
+                          }`}
+                        >
+                          {chip}
+                        </button>
+                      )
+                    )}
+                  </div>
                 </div>
 
                 {/* Pipeline Stage */}
@@ -1750,19 +2471,19 @@ export default function LeadsPage() {
                   </select>
                 </div>
 
-                {/* Requirement */}
+                {/* Solar Requirement: MANUALLY FILLABLE & OPTIONAL (NO 5KW DEFAULT) */}
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    Solar Requirement
+                    Solar Requirement <span className="font-normal text-slate-400">(Optional)</span>
                   </label>
                   <input
                     type="text"
-                    value={leadForm.requirement}
+                    value={leadForm.requirement || ""}
                     onChange={(e) =>
                       setLeadForm({ ...leadForm, requirement: e.target.value })
                     }
-                    placeholder="e.g. 5 kW Solar On-Grid"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-medium"
+                    placeholder="e.g. 3 kW On-Grid (Leave blank if undecided)"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600"
                   />
                 </div>
 
@@ -1823,14 +2544,14 @@ export default function LeadsPage() {
       )}
 
       {/* ===============================================================
-          MODAL 3: LOG CALL OUTCOME ("Call cheytho?")
+          MODAL 3: LOG CALL OUTCOME
       =============================================================== */}
       {callModalLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-start justify-between pb-2 border-b border-slate-100">
               <div>
-                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-50 text-emerald-800">
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-emerald-50 text-emerald-800">
                   <PhoneCall size={12} />
                   Log Call Outcome
                 </div>
@@ -1881,7 +2602,7 @@ export default function LeadsPage() {
                   rows={3}
                   value={callNotes}
                   onChange={(e) => setCallNotes(e.target.value)}
-                  placeholder="e.g. Spoke to customer. Interested in 5kW. Requested callback after 6 PM today."
+                  placeholder="e.g. Spoke to customer. Requested callback after 6 PM today."
                   className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-medium"
                 />
               </div>
@@ -1919,118 +2640,161 @@ export default function LeadsPage() {
       )}
 
       {/* ===============================================================
-          MODAL 4: SCHEDULE SITE VISIT ("Customer site visit time paranjo?")
+          MODAL 4: SCHEDULE VISIT OR FOLLOW-UP (INTEGRATED WITH REMINDERS)
       =============================================================== */}
-      {visitModalLead && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex items-start justify-between pb-2 border-b border-slate-100">
-              <div>
-                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-50 text-amber-800">
-                  <CalendarClock size={12} />
-                  Site Visit Scheduling
-                </div>
-                <h3 className="text-lg font-black text-slate-900 mt-1">
-                  Schedule Site Visit
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Customer: <strong>{visitModalLead.name}</strong> •{" "}
-                  {visitModalLead.section || "Area N/A"}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setVisitModalLead(null)}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X size={18} />
-              </button>
-            </div>
+      {actionModalLead && (() => {
+        const existingReminder = followups.find(
+          (f) =>
+            (f.leadId && f.leadId === actionModalLead.id) ||
+            (f.phone &&
+              actionModalLead.phone &&
+              f.phone.replace(/\D/g, "") ===
+                actionModalLead.phone.replace(/\D/g, "") &&
+              f.status !== "Completed" &&
+              f.status !== "Cancelled")
+        );
 
-            <form onSubmit={handleScheduleVisitSubmit} className="space-y-3.5 text-xs">
-              <div className="grid grid-cols-2 gap-2">
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+              <div className="flex items-start justify-between pb-2 border-b border-slate-100">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Visit Date *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={visitDate}
-                    onChange={(e) => setVisitDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-bold"
-                  />
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-amber-50 text-amber-800 border border-amber-200">
+                    <CalendarClock size={12} />
+                    {existingReminder ? "Update Existing Reminder" : "Schedule Appointment"}
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900 mt-1">
+                    {actionModalLead.name}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {actionModalLead.section || "Area N/A"} • {actionModalLead.phone}
+                  </p>
+                  {existingReminder && (
+                    <p className="text-[11px] text-amber-900 font-bold bg-amber-100/70 px-2 py-0.5 rounded-md border border-amber-200 inline-block mt-1">
+                      Existing reminder for {existingReminder.date} ({existingReminder.time ? formatTime(existingReminder.time) : ""}) will be updated!
+                    </p>
+                  )}
                 </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Visit Time *
-                  </label>
-                  <input
-                    type="time"
-                    required
-                    value={visitTime}
-                    onChange={(e) => setVisitTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-bold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Customer Address / Location Notes:
-                </label>
-                <input
-                  type="text"
-                  value={visitNotes}
-                  onChange={(e) => setVisitNotes(e.target.value)}
-                  placeholder="e.g. Near Beerancira Juma Masjid, 2-storey house"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-medium"
-                />
-              </div>
-
-              <label className="flex items-center gap-2 p-3 rounded-xl bg-teal-50 border border-teal-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={syncToFollowups}
-                  onChange={(e) => setSyncToFollowups(e.target.checked)}
-                  className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4"
-                />
-                <span className="text-xs text-teal-950 font-semibold">
-                  Sync to <strong>Visits & Follow-ups Calendar</strong> & trigger audio reminder alarms
-                </span>
-              </label>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setVisitModalLead(null)}
-                  className="px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-bold"
+                  onClick={() => setActionModalLead(null)}
+                  className="text-slate-400 hover:text-slate-600 p-1"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-4 py-2 rounded-xl bg-amber-600 text-white hover:bg-amber-700 font-bold inline-flex items-center gap-1.5 shadow-md shadow-amber-600/20"
-                >
-                  {saving && <Loader2 size={13} className="animate-spin" />}
-                  <span>Confirm Site Visit</span>
+                  <X size={18} />
                 </button>
               </div>
-            </form>
+
+              <form onSubmit={handleScheduleActionSubmit} className="space-y-3.5 text-xs">
+                {/* Activity Type Selection */}
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1.5">
+                    Appointment Type:
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {ACTION_TYPES.map((act) => (
+                      <button
+                        key={act.id}
+                        type="button"
+                        onClick={() => setActionType(act.id)}
+                        className={`p-2 rounded-xl border text-left font-bold text-xs transition ${
+                          actionType === act.id
+                            ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                            : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        {act.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Date & Time */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Date *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={actionDate}
+                      onChange={(e) => setActionDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Time *
+                    </label>
+                    <input
+                      type="time"
+                      required
+                      value={actionTime}
+                      onChange={(e) => setActionTime(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-bold"
+                    />
+                  </div>
+                </div>
+
+                {/* Address / Notes */}
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Location / Notes:
+                  </label>
+                  <input
+                    type="text"
+                    value={actionNotes}
+                    onChange={(e) => setActionNotes(e.target.value)}
+                    placeholder="e.g. Near Juma Masjid, roof survey, check KSEB bill"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-medium"
+                  />
+                </div>
+
+                {/* Sync Checkbox */}
+                <label className="flex items-center gap-2 p-3 rounded-2xl bg-amber-50/70 border border-amber-200/80 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={syncToFollowups}
+                    onChange={(e) => setSyncToFollowups(e.target.checked)}
+                    className="rounded text-amber-600 focus:ring-amber-500 h-4 w-4"
+                  />
+                  <span className="text-xs text-amber-950 font-bold">
+                    Sync to <strong>Site Visits & Reminders</strong> (Triggers exact-time alarms)
+                  </span>
+                </label>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setActionModalLead(null)}
+                    className="px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-bold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-4 py-2 rounded-xl bg-amber-600 text-white hover:bg-amber-700 font-bold inline-flex items-center gap-1.5 shadow-md shadow-amber-600/20"
+                  >
+                    {saving && <Loader2 size={13} className="animate-spin" />}
+                    <span>{existingReminder ? "Update Reminder & Visit" : "Confirm Appointment"}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ===============================================================
-          MODAL 5: CURRENT UPDATE & ACTIVITY TIMELINE ("Endhan current update?")
+          MODAL 5: CURRENT UPDATE & ACTIVITY TIMELINE
       =============================================================== */}
       {updateModalLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto space-y-4">
             <div className="flex items-start justify-between pb-2 border-b border-slate-100">
               <div>
-                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 text-blue-800">
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-blue-50 text-blue-800">
                   <Zap size={12} />
                   Live Status & Timeline
                 </div>

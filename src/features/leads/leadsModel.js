@@ -7,50 +7,50 @@ export const LEAD_STAGES = [
   {
     id: "New",
     label: "New Lead",
-    badge: "bg-blue-50 text-blue-700 border-blue-200",
-    dot: "bg-blue-500",
+    badge: "bg-slate-100 text-slate-700 border-slate-200",
+    dot: "bg-slate-400",
     desc: "Fresh lead received, yet to be contacted",
   },
   {
     id: "Contacted",
     label: "Call Done / In Talk",
-    badge: "bg-purple-50 text-purple-700 border-purple-200",
-    dot: "bg-purple-500",
+    badge: "bg-slate-100 text-slate-800 border-slate-200",
+    dot: "bg-slate-500",
     desc: "Call completed, discussing requirements",
   },
   {
     id: "Visit_Scheduled",
     label: "Site Visit Fixed",
-    badge: "bg-amber-50 text-amber-700 border-amber-200",
+    badge: "bg-amber-50 text-amber-900 border-amber-200",
     dot: "bg-amber-500",
     desc: "Customer provided date & time for site visit",
   },
   {
     id: "Visited",
     label: "Site Survey Done",
-    badge: "bg-teal-50 text-teal-700 border-teal-200",
+    badge: "bg-teal-50 text-teal-800 border-teal-200",
     dot: "bg-teal-500",
     desc: "Site visit and roof inspection completed",
   },
   {
     id: "Proposal",
     label: "Proposal Sent",
-    badge: "bg-indigo-50 text-indigo-700 border-indigo-200",
-    dot: "bg-indigo-500",
+    badge: "bg-slate-100 text-slate-800 border-slate-300",
+    dot: "bg-slate-600",
     desc: "Solar quotation & pricing provided",
   },
   {
     id: "Won",
     label: "Closed / Won",
-    badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    dot: "bg-emerald-500",
+    badge: "bg-teal-700 text-white border-teal-700",
+    dot: "bg-teal-600",
     desc: "PO confirmed, advance token received",
   },
   {
     id: "Lost",
     label: "Lost / Dropped",
-    badge: "bg-rose-50 text-rose-700 border-rose-200",
-    dot: "bg-rose-500",
+    badge: "bg-slate-50 text-slate-400 border-slate-200",
+    dot: "bg-slate-300",
     desc: "Not interested, price constraint or dropped",
   },
 ];
@@ -59,37 +59,37 @@ export const CALL_STATUSES = [
   {
     id: "Pending",
     label: "Call Pending",
-    badge: "bg-amber-100 text-amber-800 border-amber-300",
+    badge: "bg-slate-100 text-slate-700 border-slate-200",
     icon: "Clock",
   },
   {
     id: "Connected",
     label: "Connected / Spoke",
-    badge: "bg-emerald-100 text-emerald-800 border-emerald-300",
+    badge: "bg-teal-50 text-teal-800 border-teal-200",
     icon: "PhoneCall",
   },
   {
     id: "Ringing",
     label: "Ringing / No Answer",
-    badge: "bg-orange-100 text-orange-800 border-orange-300",
+    badge: "bg-slate-100 text-slate-600 border-slate-200",
     icon: "PhoneForwarded",
   },
   {
     id: "Callback",
     label: "Callback Requested",
-    badge: "bg-blue-100 text-blue-800 border-blue-300",
+    badge: "bg-amber-50 text-amber-800 border-amber-200",
     icon: "PhoneIncoming",
   },
   {
     id: "SwitchedOff",
     label: "Switched Off / Unreachable",
-    badge: "bg-slate-100 text-slate-700 border-slate-300",
+    badge: "bg-slate-100 text-slate-500 border-slate-200",
     icon: "PhoneOff",
   },
   {
     id: "Invalid",
     label: "Invalid Number",
-    badge: "bg-rose-100 text-rose-800 border-rose-300",
+    badge: "bg-slate-100 text-slate-400 border-slate-200",
     icon: "PhoneMissed",
   },
 ];
@@ -106,10 +106,21 @@ export const LEAD_SOURCES = [
   "WhatsApp",
   "FB LEAD",
   "KSEB",
-  "YOUTUBE",
   "REFERRAL",
+  "DIRECT VISIT",
+  "YOUTUBE",
   "WEBSITE",
+  "INSTAGRAM",
+  "CALL INQUIRY",
   "OTHERS",
+];
+
+export const ACTION_TYPES = [
+  { id: "Site Visit", label: "🏡 Site Visit", color: "amber" },
+  { id: "Follow-up Call", label: "📞 Follow-up Call", color: "slate" },
+  { id: "Re-visit", label: "🔄 Re-visit", color: "amber" },
+  { id: "Document Collection", label: "📑 Document Collection", color: "slate" },
+  { id: "Proposal Discussion", label: "💬 Proposal Discussion", color: "slate" },
 ];
 
 export const COMMON_SECTIONS = [
@@ -168,7 +179,7 @@ export const blankLead = (user) => ({
   siteVisitAddress: "",
   siteVisitNotes: "",
   currentUpdate: "New lead received from company",
-  requirement: "5 kW Solar On-Grid",
+  requirement: "",
   assignedTo: user?.displayName || "Ashraf",
   generatedMonth: new Date().toLocaleDateString("en-US", {
     month: "short",
@@ -276,7 +287,7 @@ export function parseLeadsText(
             currentUpdate: firstCallVal
               ? `First call completed on ${firstCallVal}`
               : "Imported from Sheet",
-            requirement: "5 kW Solar On-Grid",
+            requirement: "",
             generatedMonth: new Date().toLocaleDateString("en-US", {
               month: "short",
               year: "2-digit",
@@ -358,7 +369,7 @@ export function parseLeadsText(
         siteVisitDate: "",
         siteVisitTime: "",
         currentUpdate: "New lead from WhatsApp",
-        requirement: "5 kW Solar On-Grid",
+        requirement: "",
         generatedMonth: new Date().toLocaleDateString("en-US", {
           month: "short",
           year: "2-digit",
