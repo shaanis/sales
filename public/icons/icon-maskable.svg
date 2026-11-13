@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgm" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#115e59"/>
+      <stop offset="50%" stop-color="#0f766e"/>
+      <stop offset="100%" stop-color="#042f2e"/>
+    </linearGradient>
+    <linearGradient id="sunm" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="50%" stop-color="#facc15"/>
+      <stop offset="100%" stop-color="#eab308"/>
+    </linearGradient>
+    <linearGradient id="solarm" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Full bleed square for maskable -->
+  <rect width="512" height="512" fill="url(#bgm)"/>
+
+  <!-- Centered content within 80% safe circle (radius 200) -->
+  <g transform="translate(35, 30) scale(0.86)">
+    <!-- Golden Sun -->
+    <circle cx="256" cy="180" r="65" fill="url(#sunm)"/>
+    
+    <!-- Angled Solar PV Panel Grid -->
+    <polygon points="120,380 155,245 357,245 392,380" fill="#0f172a" stroke="#f8fafc" stroke-width="6" stroke-linejoin="round"/>
+    <polygon points="160,253 218,253 213,285 151,285" fill="url(#solarm)"/>
+    <polygon points="226,253 286,253 286,285 221,285" fill="url(#solarm)"/>
+    <polygon points="294,253 352,253 361,285 294,285" fill="url(#solarm)"/>
+
+    <polygon points="149,292 212,292 206,328 138,328" fill="url(#solarm)"/>
+    <polygon points="220,292 286,292 286,328 214,328" fill="url(#solarm)"/>
+    <polygon points="294,292 363,292 374,328 294,328" fill="url(#solarm)"/>
+
+    <polygon points="136,335 204,335 197,372 125,372" fill="url(#solarm)"/>
+    <polygon points="212,335 286,335 286,372 206,372" fill="url(#solarm)"/>
+    <polygon points="294,335 376,335 387,372 294,372" fill="url(#solarm)"/>
+
+    <!-- Lightning bolt -->
+    <polygon points="275,190 235,270 262,270 240,340 288,255 260,255" fill="#fef08a" stroke="#ca8a04" stroke-width="2"/>
+    <text x="256" y="440" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="34" font-weight="800" fill="#f8fafc" text-anchor="middle" letter-spacing="4">ECHONIX</text>
+  </g>
+</svg>

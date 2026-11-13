@@ -1,6 +1,11 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  getFirestore,
+} from "firebase/firestore";
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -24,4 +29,19 @@ const app = getApps().length
   : initializeApp(config);
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// Enable robust multi-tab offline persistence in IndexedDB
+let firestoreDb;
+try {
+  firestoreDb = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    }),
+  });
+} catch (err) {
+  // Fallback if already initialized or in test environment
+  console.warn("[Firestore] Persistent cache fallback:", err);
+  firestoreDb = getFirestore(app);
+}
+
+export const db = firestoreDb;

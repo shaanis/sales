@@ -845,3 +845,26 @@ tr:last-child td { border-bottom: 0; }
   .footer { display: block; line-height: 1.8; }
   .footer span { display: block; }
 }
+
+/* Native Mobile App Touch & Viewport Polish */
+html, body {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+@media (max-width: 768px) {
+  /* Prevent auto-zooming on focus in iOS Safari */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Safe area inset support for iPhones & modern Android devices */
+.pb-safe {
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.bottom-nav-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+

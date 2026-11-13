@@ -1,0 +1,96 @@
+{
+  "name": "ECHONIX Field Sales & Daily Report",
+  "short_name": "ECHONIX Sales",
+  "description": "Daily Sales Report, Solar Leads CRM, Site Visits, and Travel Expenses for ECHONIX Solar Field Representatives",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#0f766e",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Daily Sales Report",
+      "short_name": "Daily Report",
+      "description": "Create today's daily sales report",
+      "url": "/report",
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Solar Leads CRM",
+      "short_name": "Leads CRM",
+      "description": "Manage solar pipeline and client calls",
+      "url": "/leads",
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Visits & Follow-ups",
+      "short_name": "Follow-ups",
+      "description": "View scheduled customer site surveys",
+      "url": "/followups",
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Travel & Expenses",
+      "short_name": "Expenses",
+      "description": "Log daily TA kilometre and food expenses",
+      "url": "/expenses",
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

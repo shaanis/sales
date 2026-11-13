@@ -4,7 +4,11 @@ import { BrowserRouter } from "react-router-dom";
 
 import App from "./app/App";
 import { AuthProvider } from "./features/auth/AuthProvider";
+import { registerServiceWorker } from "./pwa/registerServiceWorker";
 import "./styles/global.css";
+
+// Register Service Worker for PWA & Offline Support
+registerServiceWorker();
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
