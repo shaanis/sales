@@ -852,11 +852,15 @@ html, body {
   touch-action: manipulation;
 }
 
-@media (max-width: 768px) {
-  /* Prevent auto-zooming on focus in iOS Safari */
-  input, select, textarea {
-    font-size: 16px !important;
-  }
+/* Compact, crisp form inputs & controls across all screen sizes */
+input, select, textarea {
+  font-size: 13px;
+}
+
+.field input, .field textarea, .field select {
+  padding: 8px 10px;
+  font-size: 12px;
+  border-radius: 8px;
 }
 
 /* Safe area inset support for iPhones & modern Android devices */

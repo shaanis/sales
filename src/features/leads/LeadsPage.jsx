@@ -1011,31 +1011,32 @@ Thank you!
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20 font-sans px-2 sm:px-4">
       {/* Page Header */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+      <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-teal-800 bg-teal-50 border border-teal-200">
-            <Users size={13} className="text-teal-600" />
-            ECHONIX Lead Pipeline & CRM
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider text-teal-800 bg-teal-50 border border-teal-200">
+            <Users size={12} className="text-teal-600" />
+            ECHONIX Lead Pipeline &amp; CRM
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-2 flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1.5 flex items-center gap-2">
             Lead Management System
           </h1>
-          <p className="text-slate-500 text-xs sm:text-sm mt-1">
-            Priority tracking for Site Visits, Today&apos;s appointments, WhatsApp lead imports, and live status updates.
+          <p className="text-slate-500 text-xs mt-0.5">
+            Priority tracking for Site Visits, appointments, WhatsApp lead imports, and live status updates.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        {/* Top Buttons Bar - Strictly Aligned & Consistent Heights */}
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full lg:w-auto">
           {/* Quick link to Site Visits & Reminders */}
           <Link
             to="/followups"
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-amber-500 text-white hover:bg-amber-600 shadow-sm transition"
+            className="h-10 px-3.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition flex items-center justify-center gap-2 active:scale-95"
             title="Open Site Visits & Reminders Calendar"
           >
-            <CalendarClock size={16} />
-            <span>Visits & Reminders</span>
+            <CalendarClock size={15} className="shrink-0" />
+            <span className="truncate">Visits &amp; Reminders</span>
             {todayPlans.length > 0 && (
-              <span className="bg-white text-amber-900 px-1.5 py-0.2 rounded-full text-[11px] font-black">
+              <span className="bg-white text-amber-900 px-1.5 py-0.5 rounded-full text-[10px] font-black leading-none shrink-0">
                 {todayPlans.length}
               </span>
             )}
@@ -1048,10 +1049,10 @@ Thank you!
               setImportText("");
               setShowImportModal(true);
             }}
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-teal-700 text-white hover:bg-teal-800 shadow-md shadow-teal-700/20 transition"
+            className="h-10 px-3.5 rounded-xl text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white shadow-xs transition flex items-center justify-center gap-2 active:scale-95"
           >
-            <ClipboardPaste size={16} />
-            <span>Smart Import</span>
+            <ClipboardPaste size={15} className="shrink-0" />
+            <span className="truncate">Smart Import</span>
           </button>
 
           {/* Manual Add Lead Button */}
@@ -1062,10 +1063,10 @@ Thank you!
               setEditingId(null);
               setShowLeadModal(true);
             }}
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-900 text-white hover:bg-slate-800 transition shadow-sm"
+            className="h-10 px-3.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-xs transition flex items-center justify-center gap-2 active:scale-95"
           >
-            <Plus size={16} />
-            <span>Add Lead</span>
+            <Plus size={15} className="shrink-0" />
+            <span className="truncate">Add Lead</span>
           </button>
 
           {/* Export to CSV */}
@@ -1073,9 +1074,10 @@ Thank you!
             type="button"
             onClick={exportToCSV}
             title="Export filtered leads to CSV spreadsheet"
-            className="inline-flex items-center justify-center p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition"
+            className="h-10 px-3.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-xs transition flex items-center justify-center gap-2 active:scale-95"
           >
-            <Download size={16} />
+            <Download size={15} className="shrink-0" />
+            <span className="truncate sm:hidden">Export CSV</span>
           </button>
         </div>
       </header>
@@ -1543,27 +1545,26 @@ Thank you!
         </div>
       ) : viewMode === "table" ? (
         /* ===============================================================
-            SPREADSHEET TABLE VIEW (RESPONSIVE & CLEAN)
+            UNIFIED SPREADSHEET TABLE VIEW (CLEAN, COMPACT & INVITING)
         =============================================================== */
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-900 text-slate-200 font-black uppercase tracking-wider text-[11px] border-b border-slate-800">
-                  <th className="py-3.5 px-3 whitespace-nowrap">Source</th>
-                  <th className="py-3.5 px-3.5 whitespace-nowrap">Stage Status</th>
-                  <th className="py-3.5 px-3.5 whitespace-nowrap">Customer Name</th>
-                  <th className="py-3.5 px-3.5 whitespace-nowrap">Section / Area</th>
-                  <th className="py-3.5 px-3.5 whitespace-nowrap">Contact Details</th>
-                  <th className="py-3.5 px-3.5 whitespace-nowrap">Call Status</th>
-                  <th className="py-3.5 px-3.5 whitespace-nowrap">Site Visit / Plan</th>
-                  <th className="py-3.5 px-4 min-w-[200px]">Current Update</th>
-                  <th className="py-3.5 px-3 whitespace-nowrap">Assign</th>
-                  <th className="py-3.5 px-3 text-right whitespace-nowrap">Actions</th>
+                <tr className="bg-slate-900 text-slate-100 font-bold uppercase tracking-wider text-[11px] border-b border-slate-800">
+                  <th className="py-3 px-3 whitespace-nowrap text-center">#</th>
+                  <th className="py-3 px-3.5 whitespace-nowrap">Customer &amp; System</th>
+                  <th className="py-3 px-3 whitespace-nowrap">Location</th>
+                  <th className="py-3 px-3 whitespace-nowrap">Phone &amp; Connect</th>
+                  <th className="py-3 px-3 whitespace-nowrap">Call Status</th>
+                  <th className="py-3 px-3.5 whitespace-nowrap">Pipeline Stage</th>
+                  <th className="py-3 px-3 whitespace-nowrap">Site Visit</th>
+                  <th className="py-3 px-3.5 min-w-[180px]">Latest Update</th>
+                  <th className="py-3 px-3 text-right whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {sortedFilteredLeads.map((lead) => {
+              <tbody className="divide-y divide-slate-100 text-slate-800">
+                {sortedFilteredLeads.map((lead, idx) => {
                   const stageObj =
                     LEAD_STAGES.find((s) => s.id === lead.status) || LEAD_STAGES[0];
                   const callObj =
@@ -1584,29 +1585,98 @@ Thank you!
                   return (
                     <tr
                       key={lead.id}
-                      className={`transition group ${
+                      className={`transition group hover:bg-teal-50/40 ${
                         isVisitToday
-                          ? "bg-amber-50/40 border-l-4 border-l-amber-500 hover:bg-amber-50/70"
+                          ? "bg-amber-50/50 border-l-4 border-l-amber-500"
                           : hasFutureVisit
                           ? "border-l-4 border-l-teal-500 hover:bg-teal-50/30"
                           : "hover:bg-slate-50"
                       }`}
                     >
-                      {/* Source */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-slate-100 text-slate-700 border border-slate-200">
-                          {lead.source || "WhatsApp"}
+                      {/* # Index & Source */}
+                      <td className="py-2.5 px-3 whitespace-nowrap text-center text-slate-400 font-mono text-[11px]">
+                        {idx + 1}
+                      </td>
+
+                      {/* Customer & Requirement */}
+                      <td className="py-2.5 px-3.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <strong className="text-slate-900 font-bold block text-xs group-hover:text-teal-900">
+                            {lead.name}
+                          </strong>
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200">
+                            {lead.source || "WA"}
+                          </span>
+                        </div>
+                        {lead.requirement && lead.requirement.trim() && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-bold text-teal-800 bg-teal-50 px-1.5 py-0.2 rounded mt-0.5 border border-teal-200">
+                            <Zap size={9} />
+                            {lead.requirement}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Location / Section */}
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 text-slate-700 text-xs font-medium">
+                          <MapPin size={12} className="text-teal-600 shrink-0" />
+                          {lead.section || "—"}
                         </span>
                       </td>
 
-                      {/* Stage Status dropdown */}
-                      <td className="py-3 px-3.5 whitespace-nowrap">
+                      {/* Phone & Direct Connect Icons */}
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-xs font-bold text-slate-900">
+                            {lead.phone}
+                          </span>
+                          {lead.phone && (
+                            <>
+                              <a
+                                href={`tel:${lead.phone}`}
+                                title={`Call ${lead.phone}`}
+                                className="p-1 rounded-md text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition"
+                              >
+                                <Phone size={12} />
+                              </a>
+                              <a
+                                href={waUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="WhatsApp Chat"
+                                className="p-1 rounded-md text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition"
+                              >
+                                <MessageCircle size={12} />
+                              </a>
+                            </>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Call Status Badge */}
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCallModalLead(lead);
+                            setCallOutcome(lead.callStatus || "Connected");
+                            setCallNotes(lead.callNotes || "");
+                          }}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition ${callObj.badge} hover:shadow-xs`}
+                        >
+                          <PhoneCall size={9} />
+                          <span>{callObj.label}</span>
+                        </button>
+                      </td>
+
+                      {/* Pipeline Stage Dropdown */}
+                      <td className="py-2.5 px-3.5 whitespace-nowrap">
                         <select
                           value={lead.status || "New"}
                           onChange={(e) =>
                             handleStageChange(lead, e.target.value)
                           }
-                          className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border focus:outline-none transition ${stageObj.badge}`}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border focus:outline-none transition ${stageObj.badge}`}
                         >
                           {LEAD_STAGES.map((s) => (
                             <option key={s.id} value={s.id}>
@@ -1616,151 +1686,52 @@ Thank you!
                         </select>
                       </td>
 
-                      {/* Name & Requirement */}
-                      <td className="py-3 px-3.5 whitespace-nowrap">
-                        <strong className="text-slate-900 font-black block text-sm">
-                          {lead.name}
-                        </strong>
-                        {lead.requirement && lead.requirement.trim() && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-700 bg-teal-50 px-1.5 py-0.2 rounded mt-0.5 border border-teal-200">
-                            <Zap size={9} />
-                            {lead.requirement}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Section */}
-                      <td className="py-3 px-3.5 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 font-semibold text-slate-800">
-                          <MapPin size={12} className="text-teal-600 shrink-0" />
-                          {lead.section || "—"}
-                        </span>
-                      </td>
-
-                      {/* Contact Details & Quick Call/WhatsApp */}
-                      <td className="py-3 px-3.5 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-slate-900">
-                            {lead.phone}
-                          </span>
-                          {lead.phone && (
-                            <>
-                              <a
-                                href={`tel:${lead.phone}`}
-                                title={`Call ${lead.phone}`}
-                                className="p-1 rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition"
-                              >
-                                <Phone size={13} />
-                              </a>
-                              <a
-                                href={waUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title="Open WhatsApp chat"
-                                className="p-1 rounded-lg text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition"
-                              >
-                                <MessageCircle size={13} />
-                              </a>
-                            </>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Call Status Badge */}
-                      <td className="py-3 px-3.5 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCallModalLead(lead);
-                            setCallOutcome(lead.callStatus || "Connected");
-                            setCallNotes(lead.callNotes || "");
-                          }}
-                          title="Click to change or log call outcome"
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition ${callObj.badge} hover:shadow-xs`}
-                        >
-                          <PhoneCall size={10} />
-                          <span>{callObj.label}</span>
-                        </button>
-                      </td>
-
-                      {/* Site Visit / Action */}
-                      <td className="py-3 px-3.5 whitespace-nowrap">
+                      {/* Site Visit */}
+                      <td className="py-2.5 px-3 whitespace-nowrap">
                         {lead.siteVisitDate ? (
-                          <div
+                          <button
+                            type="button"
                             onClick={() => openActionModal(lead, "Site Visit")}
-                            className="cursor-pointer"
+                            className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg border ${
+                              isVisitToday
+                                ? "bg-amber-500 text-white border-amber-600 animate-pulse"
+                                : "text-amber-900 bg-amber-50 border-amber-200"
+                            }`}
                           >
-                            <span
-                              className={`inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-lg border ${
-                                isVisitToday
-                                  ? "bg-amber-500 text-white border-amber-600 animate-pulse"
-                                  : "text-amber-900 bg-amber-50 border-amber-200"
-                              }`}
-                            >
-                              <CalendarClock size={11} />
-                              {isVisitToday ? "TODAY" : lead.siteVisitDate}{" "}
-                              {lead.siteVisitTime
-                                ? formatTime(lead.siteVisitTime)
-                                : ""}
-                            </span>
-                          </div>
+                            <CalendarClock size={10} />
+                            <span>{isVisitToday ? "TODAY" : lead.siteVisitDate}</span>
+                          </button>
                         ) : (
                           <button
                             type="button"
                             onClick={() => openActionModal(lead, "Site Visit")}
-                            className="text-[11px] text-amber-700 hover:text-amber-900 font-bold underline decoration-dashed"
+                            className="text-[10px] text-amber-700 hover:text-amber-900 font-bold underline decoration-dashed"
                           >
-                            + Schedule Visit
+                            + Schedule
                           </button>
                         )}
                       </td>
 
-                      {/* Current Update */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-between gap-2 max-w-xs">
-                          <p
-                            className="text-xs text-slate-700 line-clamp-2 cursor-pointer hover:text-teal-900 font-medium"
-                            onClick={() => {
-                              setUpdateModalLead(lead);
-                              setUpdateText(lead.currentUpdate || "");
-                            }}
-                            title="Click to view update history or post new note"
-                          >
+                      {/* Latest Update Note */}
+                      <td className="py-2.5 px-3.5">
+                        <div
+                          onClick={() => {
+                            setUpdateModalLead(lead);
+                            setUpdateText(lead.currentUpdate || "");
+                          }}
+                          className="flex items-center justify-between gap-1 max-w-xs cursor-pointer group/note"
+                          title="Click to add or view update notes"
+                        >
+                          <p className="text-[11px] text-slate-600 line-clamp-1 group-hover/note:text-teal-900 font-medium">
                             {lead.currentUpdate || "No update logged."}
                           </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setUpdateModalLead(lead);
-                              setUpdateText("");
-                            }}
-                            title="Add update note"
-                            className="text-slate-400 hover:text-teal-700 p-1 shrink-0"
-                          >
-                            <Pencil size={12} />
-                          </button>
+                          <Pencil size={11} className="text-slate-400 group-hover/note:text-teal-700 shrink-0" />
                         </div>
                       </td>
 
-                      {/* Assigned Rep */}
-                      <td className="py-3 px-3 whitespace-nowrap font-medium text-slate-600">
-                        {lead.assignedTo || "Ashraf"}
-                      </td>
-
-                      {/* Action buttons */}
-                      <td className="py-3 px-3 text-right whitespace-nowrap">
+                      {/* Actions */}
+                      <td className="py-2.5 px-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
-                          {/* Schedule Visit/Plan */}
-                          <button
-                            type="button"
-                            onClick={() => openActionModal(lead, "Site Visit")}
-                            title="Schedule Site Visit / Follow-up"
-                            className="p-1.5 rounded-lg text-amber-700 hover:bg-amber-50 transition"
-                          >
-                            <Calendar size={14} />
-                          </button>
-
-                          {/* Edit Full Details */}
                           <button
                             type="button"
                             onClick={() => {
@@ -1771,20 +1742,20 @@ Thank you!
                               setEditingId(lead.id);
                               setShowLeadModal(true);
                             }}
-                            title="Edit full lead information"
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-teal-700 hover:bg-teal-50 transition"
+                            title="View all technical data & edit"
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-teal-50 hover:text-teal-800 transition flex items-center gap-1 border border-slate-200"
                           >
-                            <Pencil size={14} />
+                            <Pencil size={11} />
+                            <span>Details</span>
                           </button>
 
-                          {/* Delete */}
                           <button
                             type="button"
                             onClick={() => handleDeleteLead(lead)}
                             title="Delete lead"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={13} />
                           </button>
                         </div>
                       </td>
