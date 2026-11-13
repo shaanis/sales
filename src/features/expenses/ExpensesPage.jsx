@@ -5,6 +5,8 @@ import {
   CheckCircle2,
   Download,
   Eye,
+  CarFront,
+  Sparkles,
 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
@@ -221,82 +223,50 @@ export default function ExpensesPage() {
     [officeSubmissions]
   );
 
-  // Create a snapshot that will be used by BOTH preview and submission.
-  function createSubmissionSnapshot(expenses) {
-    const expenseSnapshot = expenses.map((item) => ({
-      ...item,
+  // Preview the PDF from the current pending expenses.
+  function handlePreviewPDF() {
+    if (!pendingExpenses.length) {
+      setNote("No pending expenses are available to preview.");
+      return;
+    }
+
+    const expensesForPDF = pendingExpenses.map((expense) => ({
+      ...expense,
+      amount: getAmount(expense),
     }));
 
-    const dates = expenseSnapshot
-      .map((item) => item.date)
-      .filter(Boolean)
-      .sort();
-
-    const now = new Date().toISOString();
-
-    return {
-      submitted: true,
-      submittedAt: now,
-
-      expenses: expenseSnapshot,
-
-      expenseIds: expenseSnapshot.map((item) =>
-        String(item.id)
-      ),
-
-      submittedAmount: expenseSnapshot.reduce(
-        (sum, item) => sum + getAmount(item),
-        0
-      ),
-
-      expenseCount: expenseSnapshot.length,
-
-      periodStart: dates.length ? dates[0] : null,
-      periodEnd: dates.length ? dates[dates.length - 1] : null,
-
-      createdAt: now,
-      updatedAt: now,
+    const previewData = {
+      periodStart: pendingStartDate,
+      periodEnd: pendingEndDate,
+      submittedAmount: pendingTotal,
+      expenseCount: expensesForPDF.length,
+      note: submissionNote.trim(),
+      expenses: expensesForPDF,
     };
-  }
 
-  // Preview the actual PDF using the same PDF generator as Download.
-  function handlePreviewPDF() {
-    if (!user?.uid) {
-      setNote("Please log in first.");
-      return;
-    }
-
-    if (pendingExpenses.length === 0) {
-      setNote("There are no new expenses to preview.");
-      return;
-    }
-
-    const snapshot = createSubmissionSnapshot(pendingExpenses);
-
-    // Save the exact snapshot currently being previewed.
-    setPreviewedSubmission(snapshot);
-
-    setNote("");
+    setPreviewedSubmission(previewData);
 
     previewSubmissionPDF({
-      submission: snapshot,
+      submission: previewData,
       user,
     });
   }
 
-  // Submit the exact snapshot that was previewed.
+  // Save the submission record.
   async function markOfficeSubmitted() {
     if (!user?.uid) {
-      setNote("Please log in first.");
-      return;
-    }
-
-    if (!previewedSubmission?.expenses?.length) {
-      setNote("Please preview the PDF before submitting.");
+      setNote("Please log in to submit expenses.");
       return;
     }
 
     const snapshot = previewedSubmission;
+
+    if (!snapshot || !snapshot.expenses?.length) {
+      setNote(
+        "Please preview the PDF before submitting to freeze the exact expense list."
+      );
+      return;
+    }
 
     const confirmMessage =
       `Submit ${snapshot.expenseCount} previewed expense entries ` +
@@ -358,16 +328,18 @@ export default function ExpensesPage() {
   }
 
   return (
-    <div className="space-y-6">
-
-      <header className="page-header">
-        <div>
-          <div className="eyebrow">FIELD ACTIVITY</div>
-          <h1>Travel &amp; expenses</h1>
-          <p>
-            Add travel and expense entries. TA is calculated at ₹3 per km.
-          </p>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header */}
+      <header className="pb-2 border-b border-slate-200/60 lg:border-none">
+        <div className="text-[10px] font-black uppercase tracking-widest text-teal-700">
+          FIELD ACTIVITY
         </div>
+        <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-0.5">
+          Travel &amp; Expenses
+        </h1>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Log daily travel routes and food bills. TA is calculated at ₹3 per km.
+        </p>
       </header>
 
       {note && (
@@ -377,18 +349,16 @@ export default function ExpensesPage() {
       )}
 
       {/* Add expense form */}
-
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <h2>Add an entry</h2>
-            <p>Save one trip or expense at a time.</p>
-          </div>
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
+            Add New Entry
+          </h2>
+          <p className="text-xs text-slate-500">Record a travel trip or expense voucher.</p>
         </div>
 
-        <form onSubmit={submit}>
-          <div className="form-grid">
-
+        <form onSubmit={submit} className="space-y-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Date">
               <Input
                 type="date"
@@ -401,14 +371,13 @@ export default function ExpensesPage() {
             <Field label="Category">
               <select
                 value={form.type}
-                onChange={(event) =>
-                  updateForm("type", event.target.value)
-                }
+                onChange={(event) => updateForm("type", event.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
               >
-                <option value="TA">TA</option>
-                <option value="Food">Food</option>
-                <option value="SIM / recharge">SIM / recharge</option>
-                <option value="Other">Other</option>
+                <option value="TA">TA (Travel Allowance ₹3/km)</option>
+                <option value="Food">Food / Refreshment</option>
+                <option value="SIM / recharge">Mobile / SIM Recharge</option>
+                <option value="Other">Other Miscellaneous</option>
               </select>
             </Field>
 
@@ -420,7 +389,7 @@ export default function ExpensesPage() {
                   step="0.1"
                   value={form.km}
                   onChange={(value) => updateForm("km", value)}
-                  placeholder="e.g. 33"
+                  placeholder="e.g. 35"
                   required
                 />
               </Field>
@@ -429,8 +398,15 @@ export default function ExpensesPage() {
             <Field
               label={
                 form.type === "TA"
-                  ? "Calculated TA (₹)"
+                  ? "Calculated TA Amount (₹)"
                   : "Amount (₹)"
+              }
+              hint={
+                form.type === "TA" ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md mt-1">
+                    <Sparkles size={11} /> {form.km || 0} km × ₹{TA_RATE} = {money(calculatedAmount)}
+                  </span>
+                ) : null
               }
             >
               <Input
@@ -446,266 +422,198 @@ export default function ExpensesPage() {
                 placeholder="0"
                 readOnly={form.type === "TA"}
                 required={form.type !== "TA"}
-              />
-
-              {form.type === "TA" && (
-                <small className="hint">
-                  {form.km || 0} km × ₹{TA_RATE} ={" "}
-                  {money(calculatedAmount)}
-                </small>
-              )}
-            </Field>
-
-            <Field label="Route / places visited" className="span-2">
-              <Input
-                value={form.route}
-                onChange={(value) => updateForm("route", value)}
-                placeholder="Valanchery → Edappal"
-                required={form.type === "TA"}
+                className={
+                  form.type === "TA"
+                    ? "bg-teal-50/50 font-bold text-teal-950 border-teal-200"
+                    : ""
+                }
               />
             </Field>
 
-            <Field label="Notes" className="span-2">
-              <Input
-                value={form.note}
-                onChange={(value) => updateForm("note", value)}
-                placeholder="Additional details"
-              />
-            </Field>
+            <div className="sm:col-span-2">
+              <Field label="Route / Places Visited">
+                <Input
+                  value={form.route}
+                  onChange={(value) => updateForm("route", value)}
+                  placeholder="e.g. Valanchery ➔ Edappal ➔ Kuttippuram"
+                  required={form.type === "TA"}
+                />
+              </Field>
+            </div>
 
+            <div className="sm:col-span-2">
+              <Field label="Notes (Optional)">
+                <Input
+                  value={form.note}
+                  onChange={(value) => updateForm("note", value)}
+                  placeholder="e.g. Site survey visit for customer Rahman"
+                />
+              </Field>
+            </div>
           </div>
 
-          <button
-            className="btn primary"
-            disabled={busy}
-            type="submit"
-          >
-            <Plus size={16} />
-            {busy ? "Saving..." : "Save entry"}
-          </button>
+          <div className="pt-2">
+            <button
+              className="w-full sm:w-auto py-3 px-6 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-95 disabled:opacity-50"
+              disabled={busy}
+              type="submit"
+            >
+              <Plus size={16} />
+              <span>{busy ? "Saving..." : "Save Expense Entry"}</span>
+            </button>
+          </div>
         </form>
       </section>
 
-      {/* Pending expenses */}
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-
+      {/* Pending Office Submission Card */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-              Pending submission
+            <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              PENDING SUBMISSION
             </div>
-
-            <h2 className="mt-1 text-xl font-bold text-slate-900">
-              Office expense submission
+            <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight mt-0.5">
+              Office Expense Claim
             </h2>
-
-            <p className="mt-1 text-sm text-slate-600">
-              Only expenses that have not been submitted previously are included.
+            <p className="text-xs text-slate-500 mt-0.5">
+              Generate weekly PDF voucher for all unsubmitted travel &amp; food expenses.
             </p>
 
             {pendingExpenses.length > 0 && (
-              <p className="mt-2 text-sm font-medium text-slate-500">
-                {formatDate(pendingStartDate)} –{" "}
-                {formatDate(pendingEndDate)}
+              <p className="mt-1.5 text-xs font-semibold text-teal-700 bg-teal-50 inline-block px-2 py-0.5 rounded-lg">
+                📅 {formatDate(pendingStartDate)} – {formatDate(pendingEndDate)}
               </p>
             )}
           </div>
 
-          <div className="rounded-xl bg-slate-50 px-4 py-3 sm:min-w-44">
-            <div className="text-sm text-slate-500">
-              Pending amount
+          <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3.5 sm:min-w-44 shrink-0">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              Pending Total
             </div>
-
-            <div className="mt-1 text-2xl font-bold text-slate-900">
+            <div className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5">
               {money(pendingTotal)}
             </div>
-
-            <div className="mt-1 text-xs text-slate-500">
+            <div className="text-[10px] font-semibold text-slate-500 mt-0.5">
               {pendingExpenses.length} unsubmitted entries
             </div>
           </div>
-
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-
+        <div className="mt-4 space-y-3">
           <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-slate-700">
-              Note (optional)
+            <span className="block text-xs font-bold text-slate-700 mb-1">
+              Submission Remarks (Optional)
             </span>
-
             <textarea
               value={submissionNote}
-              onChange={(event) =>
-                setSubmissionNote(event.target.value)
-              }
+              onChange={(event) => setSubmissionNote(event.target.value)}
               rows={2}
-              placeholder="e.g. Submitted during office meeting"
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              placeholder="e.g. Weekly claims for review during office meeting"
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs sm:text-sm text-slate-900 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
             />
           </label>
 
-          <div className="flex flex-col gap-2">
+          {pendingExpenses.length === 0 && (
+            <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3.5 py-2.5 text-xs font-bold text-emerald-800 border border-emerald-200">
+              <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+              <span>All expense entries have been submitted to office.</span>
+            </div>
+          )}
 
-            {pendingExpenses.length === 0 && (
-              <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
-                <CheckCircle2 size={16} />
-                All expenses submitted
-              </div>
-            )}
-
-            {/* Preview PDF button */}
-
+          {/* Action buttons (full width on mobile) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
             <button
               type="button"
               onClick={handlePreviewPDF}
-              disabled={
-                submissionBusy || pendingExpenses.length === 0
-              }
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={submissionBusy || pendingExpenses.length === 0}
+              className="w-full py-3 px-4 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition active:scale-98 disabled:opacity-40"
             >
               <Eye size={16} />
-              Preview PDF
+              <span>Preview PDF Claim</span>
             </button>
-
-            {/* Submit button */}
 
             <button
               type="button"
               onClick={markOfficeSubmitted}
-              disabled={
-                submissionBusy ||
-                !previewedSubmission?.expenses?.length
-              }
-              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={submissionBusy || !previewedSubmission?.expenses?.length}
+              className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition active:scale-98 disabled:opacity-40"
             >
-              {submissionBusy
-                ? "Saving..."
-                : "Submit previewed expenses"}
+              <span>{submissionBusy ? "Submitting..." : "Submit to Office"}</span>
             </button>
-
           </div>
         </div>
 
         {previewedSubmission?.expenses?.length > 0 && (
-          <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-            <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
-
+          <div className="mt-3.5 flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+            <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-600" />
             <div>
-              <div className="font-semibold">
-                PDF preview prepared
-              </div>
-
-              <p className="mt-1">
-                {previewedSubmission.expenseCount} entries
-                {" · "}
-                {money(previewedSubmission.submittedAmount)}
-                {" · "}
-                Submit will save this exact previewed snapshot.
+              <strong className="block font-bold">PDF Snapshot Ready</strong>
+              <p className="mt-0.5 text-emerald-800">
+                {previewedSubmission.expenseCount} entries · {money(previewedSubmission.submittedAmount)}. Tap "Submit to Office" to freeze this claim.
               </p>
             </div>
           </div>
         )}
-
-        {pendingExpenses.length > 0 &&
-          !previewedSubmission && (
-            <p className="mt-3 text-xs text-slate-500">
-              Preview the PDF first. The Submit button will become available after previewing.
-            </p>
-          )}
-
       </section>
 
-      {/* Submission history */}
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-
-        <div className="flex items-center gap-2">
-          <CalendarDays size={20} className="text-slate-500" />
-
-          <h2 className="text-lg font-bold text-slate-900">
+      {/* Submission History Section */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-1">
+          <CalendarDays size={18} className="text-slate-500" />
+          <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
             Submission History
           </h2>
         </div>
-
-        <p className="mt-1 text-sm text-slate-600">
-          Each submission has its own saved expense snapshot and PDF.
+        <p className="text-xs text-slate-500 mb-4">
+          Previously submitted claims and their downloadable PDF vouchers.
         </p>
 
         {sortedSubmissions.length === 0 ? (
-          <div className="mt-5 rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">
-            No submission history available.
+          <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400">
+            No past office submissions recorded yet.
           </div>
         ) : (
-          <div className="mt-4 space-y-3">
-
+          <div className="space-y-2.5">
             {sortedSubmissions.map((submission) => (
               <div
                 key={submission.id}
-                className="flex flex-col gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl border border-slate-100 bg-slate-50/70"
               >
-
-                <div>
-                  <div className="font-semibold text-slate-900">
-                    Submission - {formatDate(
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-slate-900 truncate">
+                    Submission on {formatDate(
                       submission.submittedAt
                         ? submission.submittedAt.slice(0, 10)
                         : submission.periodStart
                     )}
                   </div>
 
-                  <div className="mt-1 text-sm text-slate-500">
-                    {submission.expenseCount ??
-                      submission.expenses?.length ??
-                      submission.expenseIds?.length ??
-                      0} entries
-
-                    {" · "}
-
-                    {submission.periodStart
-                      ? `${formatDate(submission.periodStart)} – ${formatDate(submission.periodEnd)}`
-                      : "Date range unavailable"}
-
-                    {submission.note
-                      ? ` · ${submission.note}`
-                      : ""}
-                  </div>
-
-                  <div className="mt-1 text-xs text-slate-500">
-                    {submission.submittedAt
-                      ? `Submitted at ${new Date(
-                          submission.submittedAt
-                        ).toLocaleString("en-IN")}`
-                      : "Submission date not recorded"}
+                  <div className="mt-0.5 text-[11px] text-slate-500 truncate">
+                    {submission.expenseCount ?? submission.expenses?.length ?? 0} entries · {submission.periodStart ? `${formatDate(submission.periodStart)} – ${formatDate(submission.periodEnd)}` : "Date range unavailable"}
+                    {submission.note ? ` · ${submission.note}` : ""}
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2 sm:items-end">
-
-                  <div className="text-lg font-bold text-slate-900">
+                <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t border-slate-200/60 sm:border-none">
+                  <strong className="text-sm sm:text-base font-black text-slate-900">
                     {money(submission.submittedAmount)}
-                  </div>
+                  </strong>
 
                   <button
                     type="button"
                     onClick={() => handleDownloadPDF(submission)}
                     disabled={!submission.expenses?.length}
-                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition active:scale-95 disabled:opacity-40"
                   >
-                    <Download size={16} />
-                    Download PDF
+                    <Download size={14} />
+                    <span>PDF</span>
                   </button>
-
                 </div>
               </div>
             ))}
-
           </div>
         )}
       </section>
-
     </div>
   );
 }

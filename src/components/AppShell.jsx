@@ -36,6 +36,7 @@ import {
   playAlarmChime,
 } from "../features/followups/notificationHelper";
 import NetworkStatusBadge from "./NetworkStatusBadge";
+import MobileInstallBanner from "./MobileInstallBanner";
 import { useNetworkStatus, usePwaInstallPrompt } from "../pwa/registerServiceWorker";
 
 export default function AppShell({ children }) {
@@ -497,6 +498,8 @@ export default function AppShell({ children }) {
 
         {/* Page Content with safe padding for bottom tab bar */}
         <main className="mx-auto min-h-[calc(100vh-65px)] w-full max-w-[1600px] px-3.5 py-4 pb-24 sm:px-6 lg:px-8 lg:py-8 lg:pb-8">
+          {/* Smart Mobile PWA Install Banner */}
+          <MobileInstallBanner />
           {children}
         </main>
 

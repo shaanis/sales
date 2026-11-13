@@ -63,6 +63,7 @@ export default function ReportPage() {
   );
   const [reportId, setReportId] = useState(null);
   const [autoMtd, setAutoMtd] = useState(true);
+  const [mobileTab, setMobileTab] = useState("form"); // "form" | "preview"
 
   // Load user's saved reports & expenses from Firestore
   const loadData = useCallback(async () => {
@@ -522,9 +523,37 @@ export default function ReportPage() {
         </div>
       )}
 
+      {/* Mobile View Switcher (Report Form vs WhatsApp Preview) */}
+      <div className="flex rounded-2xl bg-slate-200/90 p-1 lg:hidden mb-4 shadow-inner">
+        <button
+          type="button"
+          onClick={() => setMobileTab("form")}
+          className={`flex-1 py-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
+            mobileTab === "form"
+              ? "bg-white text-teal-900 shadow-sm"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          📝 Report Form
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobileTab("preview")}
+          className={`flex-1 py-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 relative ${
+            mobileTab === "preview"
+              ? "bg-white text-teal-900 shadow-sm"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          💬 WhatsApp Preview
+          <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+        </button>
+      </div>
+
       <div className="report-layout">
         {/* Report Form */}
-        <section className="panel">
+        <section className={`panel ${mobileTab === "preview" ? "hidden lg:block" : "block"}`}>
           <div className="panel-heading">
             <div>
               <h2>Report details</h2>
@@ -645,11 +674,23 @@ export default function ReportPage() {
             ].map(renderTodayField)}
           </div>
 
-          <div className="form-actions flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          {/* Quick jump to preview on mobile */}
+          <div className="mt-6 pt-4 border-t border-slate-100 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileTab("preview")}
+              className="w-full py-3 rounded-xl bg-teal-50 border border-teal-200 text-teal-900 font-bold text-xs flex items-center justify-center gap-2 shadow-xs active:scale-98 transition"
+            >
+              <Share2 size={15} className="text-teal-700" />
+              <span>Preview WhatsApp Report & Copy →</span>
+            </button>
+          </div>
+
+          <div className="form-actions flex flex-col sm:flex-row items-center justify-between gap-3 mt-6">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <button
                 type="button"
-                className="btn secondary"
+                className="btn secondary w-full sm:w-auto justify-center"
                 onClick={() => {
                   const pickDate = window.prompt(
                     "Enter date for new report (YYYY-MM-DD):",
@@ -664,7 +705,7 @@ export default function ReportPage() {
             </div>
 
             <button
-              className="btn primary"
+              className="btn primary w-full sm:w-auto justify-center"
               onClick={save}
               disabled={busy || loading}
             >
@@ -679,7 +720,7 @@ export default function ReportPage() {
         </section>
 
         {/* WhatsApp Preview Sidebar */}
-        <aside className="panel preview-panel">
+        <aside className={`panel preview-panel ${mobileTab === "form" ? "hidden lg:block" : "block"}`}>
           <div className="panel-heading">
             <div>
               <h2>WhatsApp preview</h2>
@@ -689,44 +730,57 @@ export default function ReportPage() {
             <span className="pill">LIVE</span>
           </div>
 
+          {/* Mobile Back to Edit button */}
+          <div className="mb-3 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileTab("form")}
+              className="w-full py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5"
+            >
+              ← Back to Edit Form
+            </button>
+          </div>
+
           <div className="preview-tip">
             Preview updates live as you enter today&apos;s site visits and
             metrics.
           </div>
 
           <textarea
-            className="report-output"
+            className="report-output w-full min-h-[300px] sm:min-h-[360px] font-mono text-xs p-3 rounded-xl border border-slate-200 bg-slate-900 text-emerald-300 leading-relaxed outline-none"
             value={output}
             readOnly
             aria-label="WhatsApp report preview"
           />
 
-          <button
-            type="button"
-            className="btn primary full"
-            onClick={copyReport}
-          >
-            <ClipboardCopy size={16} />
-            Copy WhatsApp report
-          </button>
+          <div className="space-y-2 mt-4">
+            <button
+              type="button"
+              className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md transition active:scale-95"
+              onClick={copyReport}
+            >
+              <ClipboardCopy size={18} />
+              <span>Copy WhatsApp Report</span>
+            </button>
 
-          <button
-            type="button"
-            className="btn primary full"
-            onClick={shareWhatsApp}
-          >
-            <Share2 size={16} />
-            Share on WhatsApp
-          </button>
+            <button
+              type="button"
+              className="w-full py-3 px-4 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-95"
+              onClick={shareWhatsApp}
+            >
+              <Share2 size={16} />
+              <span>Share on WhatsApp</span>
+            </button>
 
-          <button
-            type="button"
-            className="btn secondary full"
-            onClick={downloadReport}
-          >
-            <Download size={16} />
-            Download text file
-          </button>
+            <button
+              type="button"
+              className="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-2 transition"
+              onClick={downloadReport}
+            >
+              <Download size={15} />
+              <span>Download Text File</span>
+            </button>
+          </div>
         </aside>
       </div>
     </>
