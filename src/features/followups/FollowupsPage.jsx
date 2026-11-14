@@ -29,9 +29,11 @@ import {
   ShieldAlert,
   ArrowRight,
   Volume2,
+  RotateCw,
 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
+import RescheduleModal from "../../components/RescheduleModal";
 import {
   addRecord,
   listRecords,
@@ -81,7 +83,7 @@ const TYPE_OPTIONS = [
 const STATUS_COLORS = {
   Scheduled: "bg-amber-50 text-amber-900 border-amber-200",
   Completed: "bg-teal-50 text-teal-800 border-teal-200",
-  Rescheduled: "bg-slate-100 text-slate-700 border-slate-200",
+  Rescheduled: "bg-blue-50 text-blue-900 border-blue-200",
   Cancelled: "bg-slate-100 text-slate-500 border-slate-200",
 };
 
@@ -94,6 +96,7 @@ export default function FollowupsPage() {
   const [saving, setSaving] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [rescheduleItem, setRescheduleItem] = useState(null);
   const [form, setForm] = useState(blankFollowup);
   const [search, setSearch] = useState("");
   const [filterTab, setFilterTab] = useState("all"); // 'all' | 'today' | 'upcoming' | 'completed'
@@ -435,6 +438,11 @@ export default function FollowupsPage() {
     [items]
   );
 
+  const rescheduledCount = useMemo(
+    () => items.filter((i) => i.status === "Rescheduled").length,
+    [items]
+  );
+
   // Filtered list based on search and tab
   const filteredList = useMemo(() => {
     let list = [...items];
@@ -446,6 +454,8 @@ export default function FollowupsPage() {
       list = list.filter((i) => i.date >= today && i.status !== "Completed");
     } else if (filterTab === "completed") {
       list = list.filter((i) => i.status === "Completed");
+    } else if (filterTab === "rescheduled") {
+      list = list.filter((i) => i.status === "Rescheduled");
     }
 
     // Filter by search query
@@ -709,7 +719,7 @@ export default function FollowupsPage() {
       )}
 
       {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         <div
           onClick={() => setFilterTab("today")}
           className={`cursor-pointer rounded-2xl border p-4 bg-white transition hover:shadow-sm ${
@@ -759,6 +769,30 @@ export default function FollowupsPage() {
         </div>
 
         <div
+          onClick={() => setFilterTab("rescheduled")}
+          className={`cursor-pointer rounded-2xl border p-4 bg-white transition hover:shadow-sm ${
+            filterTab === "rescheduled"
+              ? "border-blue-500 ring-2 ring-blue-500/20"
+              : "border-slate-200"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Rescheduled
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
+              <RotateCw size={16} />
+            </div>
+          </div>
+          <strong className="text-2xl font-extrabold text-blue-700 block mt-2">
+            {rescheduledCount}
+          </strong>
+          <small className="text-[11px] text-slate-400">
+            Postponed visits
+          </small>
+        </div>
+
+        <div
           onClick={() => setFilterTab("completed")}
           className={`cursor-pointer rounded-2xl border p-4 bg-white transition hover:shadow-sm ${
             filterTab === "completed"
@@ -784,7 +818,7 @@ export default function FollowupsPage() {
 
         <div
           onClick={() => setFilterTab("all")}
-          className={`cursor-pointer rounded-2xl border p-4 bg-white transition hover:shadow-sm ${
+          className={`col-span-2 sm:col-span-1 cursor-pointer rounded-2xl border p-4 bg-white transition hover:shadow-sm ${
             filterTab === "all"
               ? "border-slate-800 ring-2 ring-slate-800/20"
               : "border-slate-200"
@@ -1069,12 +1103,12 @@ export default function FollowupsPage() {
       <section className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
         {/* Toolbar & Filters */}
         <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between bg-slate-50/50">
-          {/* Filter Tabs */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-200/60 rounded-xl text-xs font-semibold">
+          {/* Filter Tabs (Horizontal Scrollable Pills on Mobile) */}
+          <div className="flex items-center gap-1.5 p-1 bg-slate-200/60 rounded-xl text-xs font-semibold overflow-x-auto no-scrollbar max-w-full">
             <button
               type="button"
               onClick={() => setFilterTab("all")}
-              className={`px-3 py-1.5 rounded-lg transition ${
+              className={`px-3 py-1.5 rounded-lg transition whitespace-nowrap shrink-0 ${
                 filterTab === "all"
                   ? "bg-white text-slate-900 shadow-sm"
                   : "text-slate-600 hover:text-slate-900"
@@ -1085,7 +1119,7 @@ export default function FollowupsPage() {
             <button
               type="button"
               onClick={() => setFilterTab("today")}
-              className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                 filterTab === "today"
                   ? "bg-white text-amber-900 shadow-sm font-bold"
                   : "text-slate-600 hover:text-slate-900"
@@ -1097,7 +1131,7 @@ export default function FollowupsPage() {
             <button
               type="button"
               onClick={() => setFilterTab("upcoming")}
-              className={`px-3 py-1.5 rounded-lg transition ${
+              className={`px-3 py-1.5 rounded-lg transition whitespace-nowrap shrink-0 ${
                 filterTab === "upcoming"
                   ? "bg-white text-teal-900 shadow-sm"
                   : "text-slate-600 hover:text-slate-900"
@@ -1107,8 +1141,20 @@ export default function FollowupsPage() {
             </button>
             <button
               type="button"
+              onClick={() => setFilterTab("rescheduled")}
+              className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                filterTab === "rescheduled"
+                  ? "bg-white text-blue-900 shadow-sm font-bold"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <RotateCw size={12} className="text-blue-600" />
+              Rescheduled ({rescheduledCount})
+            </button>
+            <button
+              type="button"
               onClick={() => setFilterTab("completed")}
-              className={`px-3 py-1.5 rounded-lg transition ${
+              className={`px-3 py-1.5 rounded-lg transition whitespace-nowrap shrink-0 ${
                 filterTab === "completed"
                   ? "bg-white text-teal-900 shadow-sm"
                   : "text-slate-600 hover:text-slate-900"
@@ -1283,84 +1329,95 @@ export default function FollowupsPage() {
                     )}
                   </div>
 
-                  {/* Actions Bar */}
-                  <div className="flex flex-wrap items-center gap-1.5 self-start md:self-auto shrink-0">
-                    {/* Direct Phone Call */}
-                    {item.phone && (
-                      <a
-                        href={`tel:${item.phone}`}
-                        title={`Call ${item.phone}`}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition"
-                      >
-                        <Phone size={13} />
-                        Call
-                      </a>
-                    )}
+                  {/* Actions Bar (Mobile Responsive Grid & Flex) */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto shrink-0 pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-100">
+                    {/* Primary Actions: 2x2 grid on mobile, inline flex on tablet/desktop */}
+                    <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 w-full sm:w-auto">
+                      {item.phone && (
+                        <a
+                          href={`tel:${item.phone}`}
+                          title={`Call ${item.phone}`}
+                          className="py-2 px-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition flex items-center justify-center gap-1.5 active:scale-95"
+                        >
+                          <Phone size={13} />
+                          <span>Call</span>
+                        </a>
+                      )}
 
-                    {/* WhatsApp confirmation */}
-                    {item.phone && (
+                      {item.phone && (
+                        <a
+                          href={waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Send visit confirmation on WhatsApp"
+                          className="py-2 px-2.5 rounded-xl text-xs font-bold bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200 transition flex items-center justify-center gap-1.5 active:scale-95"
+                        >
+                          <MessageCircle size={13} />
+                          <span>WhatsApp</span>
+                        </a>
+                      )}
+
+                      {!isDone && (
+                        <button
+                          type="button"
+                          onClick={() => setRescheduleItem(item)}
+                          title="Customer not home / busy / reschedule date"
+                          className="py-2 px-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200 transition active:scale-95 shadow-2xs flex items-center justify-center gap-1.5"
+                        >
+                          <RotateCw size={12} className="text-amber-700" />
+                          <span>Reschedule</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => markCompleted(item)}
+                        title={isDone ? "Re-open" : "Mark as Completed"}
+                        className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 active:scale-95 ${
+                          isDone
+                            ? "bg-slate-100 text-slate-600 hover:bg-slate-200 border-slate-200"
+                            : "bg-slate-900 text-white hover:bg-slate-800 border-slate-900 shadow-xs"
+                        }`}
+                      >
+                        <Check size={13} />
+                        <span>{isDone ? "Re-open" : "Done"}</span>
+                      </button>
+                    </div>
+
+                    {/* Secondary Utility Icons: Calendar, Edit, Delete */}
+                    <div className="flex items-center justify-end sm:justify-start gap-1 w-full sm:w-auto">
                       <a
-                        href={waUrl}
+                        href={item.googleHtmlLink || googleCalUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        title="Send visit confirmation on WhatsApp"
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200 transition"
+                        title={
+                          item.googleHtmlLink
+                            ? "Open in Google Calendar"
+                            : "Save to Google Calendar for phone alarm"
+                        }
+                        className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200/80 transition"
                       >
-                        <MessageCircle size={13} />
-                        WhatsApp
+                        <CalendarPlus size={14} />
                       </a>
-                    )}
 
-                    {/* Google Calendar sync (Alarm reminder on mobile) */}
-                    <a
-                      href={item.googleHtmlLink || googleCalUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={
-                        item.googleHtmlLink
-                          ? "Open in Google Calendar"
-                          : "Save to Google Calendar for phone alarm"
-                      }
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition"
-                    >
-                      <CalendarPlus size={13} />
-                      Calendar
-                    </a>
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(item)}
+                        title="Edit Details"
+                        className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200/80 transition"
+                      >
+                        <Pencil size={14} />
+                      </button>
 
-                    {/* Mark Completed Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => markCompleted(item)}
-                      title={isDone ? "Re-open" : "Mark as Completed"}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition ${
-                        isDone
-                          ? "bg-slate-100 text-slate-600 hover:bg-slate-200 border-slate-200"
-                          : "bg-slate-900 text-white hover:bg-slate-800 border-slate-900 shadow-xs"
-                      }`}
-                    >
-                      <Check size={13} />
-                      {isDone ? "Done" : "Complete"}
-                    </button>
-
-                    {/* Edit */}
-                    <button
-                      type="button"
-                      onClick={() => handleEdit(item)}
-                      title="Edit or Reschedule"
-                      className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition"
-                    >
-                      <Pencil size={15} />
-                    </button>
-
-                    {/* Delete */}
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(item)}
-                      title="Delete follow-up"
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(item)}
+                        title="Delete follow-up"
+                        className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200/80 transition"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 </article>
               );
@@ -1375,6 +1432,22 @@ export default function FollowupsPage() {
           </footer>
         )}
       </section>
+
+      {/* Reschedule Visit Modal */}
+      {rescheduleItem && (
+        <RescheduleModal
+          isOpen={Boolean(rescheduleItem)}
+          item={rescheduleItem}
+          onClose={() => setRescheduleItem(null)}
+          onSuccess={(updated) => {
+            loadFollowups();
+            showNotification(
+              `Site visit for "${updated.name}" has been rescheduled.`,
+              "success"
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

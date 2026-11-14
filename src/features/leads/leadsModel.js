@@ -123,6 +123,45 @@ export const ACTION_TYPES = [
   { id: "Proposal Discussion", label: "💬 Proposal Discussion", color: "slate" },
 ];
 
+export const RESCHEDULE_REASONS = [
+  {
+    id: "not_home",
+    label: "Customer Not at Home",
+    desc: "Not available at location / out of town",
+    icon: "Home",
+  },
+  {
+    id: "busy",
+    label: "Customer Busy / At Work",
+    desc: "In office or urgent work",
+    icon: "Clock",
+  },
+  {
+    id: "date_postponed",
+    label: "Customer Postponed Date",
+    desc: "Requested another convenient date",
+    icon: "Calendar",
+  },
+  {
+    id: "call_later",
+    label: "Asked to Call Later",
+    desc: "Will confirm schedule on callback",
+    icon: "PhoneCall",
+  },
+  {
+    id: "exec_delay",
+    label: "Executive Route Delay",
+    desc: "Route delay or schedule conflict",
+    icon: "Car",
+  },
+  {
+    id: "not_interested",
+    label: "Not Interested Right Now",
+    desc: "Deal paused or cancelled",
+    icon: "XCircle",
+  },
+];
+
 export const COMMON_SECTIONS = [
   "VALANCHERI",
   "EDAYOOR",

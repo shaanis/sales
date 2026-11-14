@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
+import RescheduleModal from "../../components/RescheduleModal";
 import {
   addRecord,
   listRecords,
@@ -84,6 +85,8 @@ export default function LeadsPage() {
 
   // View mode: 'table' or 'board'
   const [viewMode, setViewMode] = useState("table");
+  const [hideEmptyStages, setHideEmptyStages] = useState(true);
+  const [boardStageFilter, setBoardStageFilter] = useState("all");
 
   // Sorting: 'visits_first' | 'newest' | 'calls_pending' | 'alphabetical'
   const [sortBy, setSortBy] = useState("visits_first");
@@ -122,6 +125,7 @@ export default function LeadsPage() {
 
   const [updateModalLead, setUpdateModalLead] = useState(null);
   const [updateText, setUpdateText] = useState("");
+  const [rescheduleItem, setRescheduleItem] = useState(null);
 
   const showNotification = (text, type = "info") => {
     setNote({ text, type });
@@ -1110,70 +1114,66 @@ Thank you!
       )}
 
       {/* ===============================================================
-          TODAY'S SCHEDULE & ACTION PLAN (MINIMAL, PENDING FIRST ON TOP)
+          TODAY'S SCHEDULE & ACTION PLAN (COMPACT WHEN EMPTY, EXPANDED WHEN ACTIVE)
       =============================================================== */}
-      <section className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
-              <CalendarClock size={16} />
+      {todayPlans.length === 0 ? (
+        <div className="bg-white rounded-2xl px-4 py-2.5 border border-slate-200/90 shadow-2xs flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2 text-slate-500 font-medium">
+            <div className="w-6 h-6 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
+              <CalendarClock size={13} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-slate-900">
-                  Today&apos;s Action Plan
-                </h2>
-                {pendingTodayPlans.length > 0 ? (
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-200">
-                    {pendingTodayPlans.length} Pending
-                  </span>
-                ) : (
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                    All Done
-                  </span>
-                )}
-                {completedTodayPlans.length > 0 && (
-                  <span className="text-xs font-medium text-slate-400">
-                    • {completedTodayPlans.length} Completed
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Visits, calls, and actions scheduled for today ({today}).
-              </p>
-            </div>
+            <span>No visits or follow-ups scheduled for today ({today}).</span>
           </div>
-
           <Link
             to="/followups"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition shrink-0 self-start sm:self-auto"
+            className="text-xs font-bold text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 shrink-0"
           >
-            <span>Open Reminders</span>
-            <ArrowRight size={13} />
+            <span>Calendar</span>
+            <ArrowRight size={12} />
           </Link>
         </div>
+      ) : (
+        <section className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
+                <CalendarClock size={16} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-slate-900">
+                    Today&apos;s Action Plan
+                  </h2>
+                  {pendingTodayPlans.length > 0 ? (
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-200">
+                      {pendingTodayPlans.length} Pending
+                    </span>
+                  ) : (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                      All Done
+                    </span>
+                  )}
+                  {completedTodayPlans.length > 0 && (
+                    <span className="text-xs font-medium text-slate-400">
+                      • {completedTodayPlans.length} Completed
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Visits, calls, and actions scheduled for today ({today}).
+                </p>
+              </div>
+            </div>
 
-        {todayPlans.length === 0 ? (
-          <div className="py-4 px-4 bg-slate-50/70 rounded-2xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <span className="text-slate-500 font-medium">
-              No visits or follow-ups scheduled for today.
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                if (leads.length > 0) {
-                  openActionModal(leads[0], "Site Visit");
-                } else {
-                  setShowLeadModal(true);
-                }
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition shrink-0"
+            <Link
+              to="/followups"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition shrink-0 self-start sm:self-auto"
             >
-              <Plus size={13} />
-              <span>Schedule for Today</span>
-            </button>
+              <span>Open Reminders</span>
+              <ArrowRight size={13} />
+            </Link>
           </div>
-        ) : (
+
           <div className="space-y-4">
             {/* PENDING ITEMS - SHOWN FIRST AT THE VERY TOP */}
             {pendingTodayPlans.length > 0 && (
@@ -1217,13 +1217,13 @@ Thank you!
                         )}
                       </div>
 
-                      {/* Quick Actions */}
+                      {/* Quick Actions (Responsive Flex Bar) */}
                       <div className="flex items-center gap-1.5 pt-2 border-t border-slate-100">
                         {plan.phone && (
                           <a
                             href={`tel:${plan.phone}`}
                             title={`Call ${plan.name} (${plan.phone})`}
-                            className="p-2 rounded-xl text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition"
+                            className="p-2 rounded-xl text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition shrink-0"
                           >
                             <Phone size={13} />
                           </a>
@@ -1235,7 +1235,7 @@ Thank you!
                             target="_blank"
                             rel="noopener noreferrer"
                             title="WhatsApp reminder"
-                            className="p-2 rounded-xl text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition"
+                            className="p-2 rounded-xl text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition shrink-0"
                           >
                             <MessageCircle size={13} />
                           </a>
@@ -1244,8 +1244,19 @@ Thank you!
                         <button
                           type="button"
                           disabled={saving}
+                          onClick={() => setRescheduleItem(plan)}
+                          className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 py-2 px-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200 transition active:scale-95 shadow-xs whitespace-nowrap"
+                          title="Customer not home / busy / reschedule date"
+                        >
+                          <RotateCw size={12} className="text-amber-700" />
+                          <span>Reschedule</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={saving}
                           onClick={() => handleCompleteTodayPlan(plan)}
-                          className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition shadow-xs"
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition shadow-xs whitespace-nowrap"
                         >
                           <CheckCircle2 size={13} />
                           <span>Mark Done</span>
@@ -1291,11 +1302,11 @@ Thank you!
               </div>
             )}
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
-      {/* Top Metric Cards - Minimal 3-Color Design (No Rainbow Clutter) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* Top Metric Cards - Minimal & Compact (Horizontal scroll on mobile to avoid pushing content down) */}
+      <div className="flex overflow-x-auto gap-2 pb-1 no-scrollbar sm:grid sm:grid-cols-3 lg:grid-cols-6">
         {[
           { id: "all", label: "Total Leads", count: stats.total },
           { id: "visits_due", label: "Visits Due", count: stats.visitsScheduled, isPriority: true },
@@ -1309,7 +1320,7 @@ Thank you!
             <div
               key={m.id}
               onClick={() => setStageFilter(m.id)}
-              className={`cursor-pointer rounded-2xl p-3.5 border transition ${
+              className={`cursor-pointer rounded-2xl p-2.5 sm:p-3 border transition shrink-0 min-w-[120px] sm:min-w-0 ${
                 isSelected
                   ? "bg-slate-900 text-white border-slate-900 shadow-xs"
                   : m.isPriority && m.count > 0
@@ -1319,17 +1330,17 @@ Thank you!
             >
               <div className="flex items-center justify-between">
                 <p
-                  className={`text-[10px] font-bold uppercase tracking-wider ${
+                  className={`text-[10px] font-bold uppercase tracking-wider truncate ${
                     isSelected ? "text-slate-300" : "text-slate-400"
                   }`}
                 >
                   {m.label}
                 </p>
                 {m.isPriority && m.count > 0 && !isSelected && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                 )}
               </div>
-              <p className="text-xl sm:text-2xl font-black mt-1">{m.count}</p>
+              <p className="text-lg sm:text-2xl font-black mt-0.5">{m.count}</p>
             </div>
           );
         })}
@@ -1618,10 +1629,14 @@ Thank you!
 
                       {/* Location / Section */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 text-slate-700 text-xs font-medium">
-                          <MapPin size={12} className="text-teal-600 shrink-0" />
-                          {lead.section || "—"}
-                        </span>
+                        {lead.section && lead.section.trim() && !["—", "-", "area not specified"].includes(lead.section.trim().toLowerCase()) ? (
+                          <span className="inline-flex items-center gap-1 text-slate-700 text-xs font-medium">
+                            <MapPin size={12} className="text-teal-600 shrink-0" />
+                            <span>{lead.section.trim()}</span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 text-xs select-none">—</span>
+                        )}
                       </td>
 
                       {/* Phone & Direct Connect Icons */}
@@ -1669,43 +1684,56 @@ Thank you!
                         </button>
                       </td>
 
-                      {/* Pipeline Stage Dropdown */}
+                      {/* Pipeline Stage Dropdown with Chevron */}
                       <td className="py-2.5 px-3.5 whitespace-nowrap">
-                        <select
-                          value={lead.status || "New"}
-                          onChange={(e) =>
-                            handleStageChange(lead, e.target.value)
-                          }
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border focus:outline-none transition ${stageObj.badge}`}
-                        >
-                          {LEAD_STAGES.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.label}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="relative inline-flex items-center">
+                          <select
+                            value={lead.status || "New"}
+                            onChange={(e) =>
+                              handleStageChange(lead, e.target.value)
+                            }
+                            className={`text-[10px] font-bold pl-2.5 pr-5 py-0.5 rounded-lg border appearance-none cursor-pointer focus:outline-none transition ${stageObj.badge}`}
+                          >
+                            {LEAD_STAGES.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.label}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
+                        </div>
                       </td>
 
                       {/* Site Visit */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
-                        {lead.siteVisitDate ? (
-                          <button
-                            type="button"
-                            onClick={() => openActionModal(lead, "Site Visit")}
-                            className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg border ${
-                              isVisitToday
-                                ? "bg-amber-500 text-white border-amber-600 animate-pulse"
-                                : "text-amber-900 bg-amber-50 border-amber-200"
-                            }`}
-                          >
-                            <CalendarClock size={10} />
-                            <span>{isVisitToday ? "TODAY" : lead.siteVisitDate}</span>
-                          </button>
+                        {lead.siteVisitDate && lead.siteVisitDate.trim() && lead.siteVisitDate.trim() !== "—" ? (
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => openActionModal(lead, "Site Visit")}
+                              className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg border ${
+                                isVisitToday
+                                  ? "bg-amber-500 text-white border-amber-600 animate-pulse"
+                                  : "text-amber-900 bg-amber-50 border-amber-200"
+                              }`}
+                            >
+                              <CalendarClock size={10} />
+                              <span>{isVisitToday ? "TODAY" : lead.siteVisitDate}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRescheduleItem(lead)}
+                              title="Reschedule / Postpone site visit"
+                              className="p-1 rounded text-slate-400 hover:text-amber-700 hover:bg-amber-50 transition"
+                            >
+                              <RotateCw size={11} />
+                            </button>
+                          </div>
                         ) : (
                           <button
                             type="button"
                             onClick={() => openActionModal(lead, "Site Visit")}
-                            className="text-[10px] text-amber-700 hover:text-amber-900 font-bold underline decoration-dashed"
+                            className="text-[10px] text-slate-400 hover:text-amber-700 font-medium"
                           >
                             + Schedule
                           </button>
@@ -1722,10 +1750,17 @@ Thank you!
                           className="flex items-center justify-between gap-1 max-w-xs cursor-pointer group/note"
                           title="Click to add or view update notes"
                         >
-                          <p className="text-[11px] text-slate-600 line-clamp-1 group-hover/note:text-teal-900 font-medium">
-                            {lead.currentUpdate || "No update logged."}
-                          </p>
-                          <Pencil size={11} className="text-slate-400 group-hover/note:text-teal-700 shrink-0" />
+                          {lead.currentUpdate && lead.currentUpdate.trim() && !["no update logged.", "—", "-"].includes(lead.currentUpdate.trim().toLowerCase()) ? (
+                            <p className="text-[11px] text-slate-700 line-clamp-1 group-hover/note:text-teal-900 font-medium">
+                              {lead.currentUpdate.trim()}
+                            </p>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 group-hover/note:text-teal-700 inline-flex items-center gap-0.5">
+                              <Plus size={10} />
+                              <span>Add note</span>
+                            </span>
+                          )}
+                          <Pencil size={11} className="text-slate-300 group-hover/note:text-teal-700 shrink-0" />
                         </div>
                       </td>
 
@@ -1768,290 +1803,399 @@ Thank you!
         </div>
       ) : (
         /* ===============================================================
-            KANBAN PIPELINE BOARD VIEW (RESPONSIVE & CLEAN)
+            PIPELINE BOARD VIEW (SLICK, COMPACT & NO EMPTY GAPS)
         =============================================================== */
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
-          {LEAD_STAGES.map((stage) => {
-            const stageLeads = sortedFilteredLeads.filter(
-              (l) => l.status === stage.id
-            );
-            const isVisitStage = stage.id === "Visit_Scheduled";
-
-            return (
-              <div
-                key={stage.id}
-                className={`rounded-2xl p-3.5 space-y-3 transition border ${
-                  isVisitStage
-                    ? "bg-amber-50/30 border-amber-300"
-                    : "bg-slate-50 border-slate-200"
+        <div className="space-y-4">
+          {/* Stage Filter Tab Bar (Pills with real-time lead counts) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
+              <button
+                type="button"
+                onClick={() => setBoardStageFilter("all")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+                  boardStageFilter === "all"
+                    ? "bg-slate-900 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                 }`}
               >
-                {/* Column Header */}
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2.5 w-2.5 rounded-full ${stage.dot}`} />
-                    <h3 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
-                      {stage.label}
-                    </h3>
-                  </div>
-                  <span
-                    className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
-                      isVisitStage
-                        ? "bg-amber-500 text-white border-amber-600"
-                        : "bg-white text-slate-700 border-slate-200 shadow-2xs"
+                <span>All Active Stages</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-white/20">
+                  {sortedFilteredLeads.length}
+                </span>
+              </button>
+
+              {LEAD_STAGES.map((st) => {
+                const count = sortedFilteredLeads.filter(
+                  (l) => l.status === st.id
+                ).length;
+                if (count === 0 && hideEmptyStages && boardStageFilter !== st.id) {
+                  return null;
+                }
+                return (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => setBoardStageFilter(st.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+                      boardStageFilter === st.id
+                        ? "bg-teal-700 text-white shadow-xs"
+                        : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200"
                     }`}
                   >
-                    {stageLeads.length}
-                  </span>
-                </div>
+                    <span className={`w-2 h-2 rounded-full ${st.dot}`} />
+                    <span>{st.label}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                        boardStageFilter === st.id
+                          ? "bg-white/20"
+                          : "bg-slate-200 text-slate-700"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
-                {/* Cards in column */}
-                <div className="space-y-3 min-h-[160px]">
-                  {stageLeads.length === 0 ? (
-                    <div className="text-center py-10 text-slate-400 text-xs font-medium">
-                      No leads in this stage
+            {/* Empty Stages Visibility Toggle */}
+            <button
+              type="button"
+              onClick={() => setHideEmptyStages(!hideEmptyStages)}
+              className="text-[11px] font-bold text-slate-500 hover:text-slate-800 self-end sm:self-auto px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 transition shrink-0"
+            >
+              {hideEmptyStages ? "Show all stages" : "Hide empty stages"}
+            </button>
+          </div>
+
+          {/* Kanban Lanes - Horizontal Swipeable on Mobile, Side-by-Side on Desktop */}
+          <div className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory items-start no-scrollbar">
+            {LEAD_STAGES.filter((st) => {
+              if (boardStageFilter !== "all") return st.id === boardStageFilter;
+              const count = sortedFilteredLeads.filter(
+                (l) => l.status === st.id
+              ).length;
+              if (hideEmptyStages && count === 0) return false;
+              return true;
+            }).map((stage) => {
+              const stageLeads = sortedFilteredLeads.filter(
+                (l) => l.status === stage.id
+              );
+              const isVisitStage = stage.id === "Visit_Scheduled";
+
+              return (
+                <div
+                  key={stage.id}
+                  className={`w-[85vw] sm:w-80 shrink-0 snap-start rounded-2xl p-3.5 space-y-3 transition border ${
+                    isVisitStage
+                      ? "bg-amber-50/30 border-amber-300"
+                      : "bg-slate-50 border-slate-200"
+                  }`}
+                >
+                  {/* Column Header */}
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${stage.dot}`} />
+                      <h3 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
+                        {stage.label}
+                      </h3>
                     </div>
-                  ) : (
-                    stageLeads.map((lead) => {
-                      const waUrl = generateLeadWhatsAppUrl(
-                        lead,
-                        user?.displayName
-                      );
-                      const callObj =
-                        CALL_STATUSES.find((c) => c.id === lead.callStatus) ||
-                        CALL_STATUSES[0];
-                      const isVisitToday =
-                        lead.siteVisitDate === today &&
-                        (lead.visitStatus === "Scheduled" ||
-                          lead.status === "Visit_Scheduled");
+                    <span
+                      className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
+                        isVisitStage
+                          ? "bg-amber-500 text-white border-amber-600"
+                          : "bg-white text-slate-700 border-slate-200 shadow-2xs"
+                      }`}
+                    >
+                      {stageLeads.length}
+                    </span>
+                  </div>
 
-                      // Check populated data fields - only show fields that have real data
-                      const hasSection = Boolean(
-                        lead.section &&
-                          lead.section.trim() &&
-                          lead.section.trim() !== "—" &&
-                          lead.section.trim() !== "-" &&
-                          lead.section.trim().toLowerCase() !== "area not specified"
-                      );
-                      const hasRequirement = Boolean(
-                        lead.requirement &&
-                          lead.requirement.trim() &&
-                          lead.requirement.trim() !== "—" &&
-                          lead.requirement.trim() !== "-"
-                      );
-                      const hasVisit = Boolean(
-                        lead.siteVisitDate &&
-                          lead.siteVisitDate.trim() &&
-                          lead.siteVisitDate.trim() !== "—"
-                      );
-                      const hasPhone = Boolean(
-                        lead.phone &&
-                          lead.phone.trim() &&
-                          lead.phone.trim() !== "—" &&
-                          lead.phone.trim() !== "-"
-                      );
-                      const hasSource = Boolean(
-                        lead.source &&
-                          lead.source.trim() &&
-                          lead.source.trim() !== "—"
-                      );
-                      const hasCallStatus = Boolean(
-                        lead.callStatus && lead.callStatus.trim()
-                      );
+                  {/* Cards in column */}
+                  <div className="space-y-3">
+                    {stageLeads.length === 0 ? (
+                      <div className="text-center py-6 border border-dashed border-slate-200 rounded-xl text-slate-400 text-xs font-medium">
+                        No leads in this stage
+                      </div>
+                    ) : (
+                      stageLeads.map((lead) => {
+                        const waUrl = generateLeadWhatsAppUrl(
+                          lead,
+                          user?.displayName
+                        );
+                        const callObj =
+                          CALL_STATUSES.find((c) => c.id === lead.callStatus) ||
+                          CALL_STATUSES[0];
+                        const isVisitToday =
+                          lead.siteVisitDate === today &&
+                          (lead.visitStatus === "Scheduled" ||
+                            lead.status === "Visit_Scheduled");
 
-                      const rawUpdate = lead.currentUpdate
-                        ? lead.currentUpdate.trim()
-                        : "";
-                      const hasCurrentUpdate = Boolean(
-                        rawUpdate &&
-                          ![
-                            "no update logged.",
-                            "new lead received from company",
-                            "lead recorded in system",
-                            "—",
-                            "-",
-                          ].includes(rawUpdate.toLowerCase())
-                      );
+                        const hasSection = Boolean(
+                          lead.section &&
+                            lead.section.trim() &&
+                            lead.section.trim() !== "—" &&
+                            lead.section.trim() !== "-" &&
+                            lead.section.trim().toLowerCase() !== "area not specified"
+                        );
+                        const hasRequirement = Boolean(
+                          lead.requirement &&
+                            lead.requirement.trim() &&
+                            lead.requirement.trim() !== "—" &&
+                            lead.requirement.trim() !== "-"
+                        );
+                        const hasVisit = Boolean(
+                          lead.siteVisitDate &&
+                            lead.siteVisitDate.trim() &&
+                            lead.siteVisitDate.trim() !== "—"
+                        );
+                        const hasPhone = Boolean(
+                          lead.phone &&
+                            lead.phone.trim() &&
+                            lead.phone.trim() !== "—" &&
+                            lead.phone.trim() !== "-"
+                        );
+                        const hasSource = Boolean(
+                          lead.source &&
+                            lead.source.trim() &&
+                            lead.source.trim() !== "—"
+                        );
+                        const hasCallStatus = Boolean(
+                          lead.callStatus && lead.callStatus.trim()
+                        );
 
-                      return (
-                        <div
-                          key={lead.id}
-                          className={`bg-white rounded-2xl p-4 border transition-all duration-150 space-y-3 shadow-xs hover:shadow-md ${
-                            isVisitToday
-                              ? "border-amber-400 ring-2 ring-amber-400/25"
-                              : "border-slate-200"
-                          }`}
-                        >
-                          {/* Top Badges (Only shown if source or callStatus is set) */}
-                          {(hasSource || hasCallStatus) && (
-                            <div className="flex items-center justify-between gap-2">
-                              {hasSource ? (
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
-                                  {lead.source.trim()}
-                                </span>
-                              ) : (
-                                <span />
-                              )}
+                        const rawUpdate = lead.currentUpdate
+                          ? lead.currentUpdate.trim()
+                          : "";
+                        const hasCurrentUpdate = Boolean(
+                          rawUpdate &&
+                            ![
+                              "no update logged.",
+                              "new lead received from company",
+                              "lead recorded in system",
+                              "—",
+                              "-",
+                            ].includes(rawUpdate.toLowerCase())
+                        );
 
-                              {hasCallStatus && (
-                                <span
-                                  className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border ${callObj.badge}`}
-                                >
-                                  {callObj.label}
-                                </span>
-                              )}
+                        // Visual Pipeline Stepper Steps
+                        const PIPELINE_FLOW = [
+                          { id: "New", label: "New" },
+                          { id: "Contacted", label: "Talk" },
+                          { id: "Visit_Scheduled", label: "Visit" },
+                          { id: "Visited", label: "Survey" },
+                          { id: "Proposal", label: "Quote" },
+                          { id: "Won", label: "Won" },
+                        ];
+                        const currentStepIndex = PIPELINE_FLOW.findIndex(
+                          (p) => p.id === lead.status
+                        );
+
+                        return (
+                          <div
+                            key={lead.id}
+                            className={`bg-white rounded-2xl p-3.5 border transition-all duration-150 space-y-3 shadow-xs hover:shadow-md ${
+                              isVisitToday
+                                ? "border-amber-400 ring-2 ring-amber-400/25"
+                                : "border-slate-200"
+                            }`}
+                          >
+                            {/* Visual Progress Stepper for Pipeline */}
+                            <div className="bg-slate-50/90 p-1 rounded-xl border border-slate-100 flex items-center justify-between gap-0.5">
+                              {PIPELINE_FLOW.map((step, idx) => {
+                                const isCurrent = lead.status === step.id;
+                                const isPassed = currentStepIndex > idx;
+                                return (
+                                  <button
+                                    key={step.id}
+                                    type="button"
+                                    onClick={() => handleStageChange(lead, step.id)}
+                                    title={`Click to set stage: ${step.label}`}
+                                    className={`flex-1 py-1 rounded-lg text-[9px] font-bold text-center transition truncate ${
+                                      isCurrent
+                                        ? "bg-slate-900 text-white shadow-2xs"
+                                        : isPassed
+                                        ? "bg-teal-50 text-teal-700"
+                                        : "text-slate-400 hover:text-slate-700"
+                                    }`}
+                                  >
+                                    {step.label}
+                                  </button>
+                                );
+                              })}
                             </div>
-                          )}
 
-                          {/* Customer Name & (only populated) Section/Requirement */}
-                          <div>
-                            <h4 className="font-extrabold text-slate-900 text-sm sm:text-base leading-snug">
-                              {lead.name}
-                            </h4>
-                            {(hasSection || hasRequirement) && (
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 mt-1">
-                                {hasSection && (
-                                  <span className="flex items-center gap-1 font-medium text-slate-700">
-                                    <MapPin
-                                      size={12}
-                                      className="text-teal-700 shrink-0"
-                                    />
-                                    {lead.section.trim()}
+                            {/* Badges: Source + Call Status */}
+                            {(hasSource || hasCallStatus) && (
+                              <div className="flex items-center justify-between gap-2">
+                                {hasSource ? (
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                                    {lead.source.trim()}
                                   </span>
+                                ) : (
+                                  <span />
                                 )}
-                                {hasRequirement && (
-                                  <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
-                                    <Zap size={9} />
-                                    {lead.requirement.trim()}
+
+                                {hasCallStatus && (
+                                  <span
+                                    className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border ${callObj.badge}`}
+                                  >
+                                    {callObj.label}
                                   </span>
                                 )}
                               </div>
                             )}
-                          </div>
 
-                          {/* Scheduled Site Visit Highlight - Only if scheduled */}
-                          {hasVisit && (
-                            <div
-                              onClick={() =>
-                                openActionModal(lead, "Site Visit")
-                              }
-                              className={`rounded-xl p-2.5 text-xs font-bold flex items-center justify-between cursor-pointer border transition ${
-                                isVisitToday
-                                  ? "bg-amber-500 text-white border-amber-600 shadow-xs animate-pulse"
-                                  : "bg-amber-50 text-amber-950 border-amber-200 hover:bg-amber-100"
-                              }`}
-                              title="Click to view/reschedule visit"
-                            >
-                              <span className="flex items-center gap-1.5">
-                                <CalendarClock size={13} className="shrink-0" />
-                                <span>
-                                  {isVisitToday ? "TODAY" : lead.siteVisitDate}{" "}
-                                  {lead.siteVisitTime
-                                    ? formatTime(lead.siteVisitTime)
-                                    : ""}
-                                </span>
-                              </span>
-                              <span className="text-[10px] uppercase font-bold underline decoration-dashed">
-                                Edit
-                              </span>
+                            {/* Customer Name & Section / Requirement */}
+                            <div>
+                              <h4 className="font-extrabold text-slate-900 text-sm leading-snug">
+                                {lead.name}
+                              </h4>
+                              {(hasSection || hasRequirement) && (
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600 mt-1">
+                                  {hasSection && (
+                                    <span className="flex items-center gap-1 font-medium text-slate-700">
+                                      <MapPin
+                                        size={12}
+                                        className="text-teal-700 shrink-0"
+                                      />
+                                      {lead.section.trim()}
+                                    </span>
+                                  )}
+                                  {hasRequirement && (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
+                                      <Zap size={9} />
+                                      {lead.requirement.trim()}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                          )}
 
-                          {/* Phone & Quick Contact - Only if phone is provided */}
-                          {hasPhone && (
-                            <div className="flex items-center justify-between gap-2 text-xs pt-0.5">
-                              <span className="font-mono font-bold text-slate-800">
-                                {lead.phone.trim()}
-                              </span>
-                              <div className="flex items-center gap-1">
-                                <a
-                                  href={`tel:${lead.phone.trim()}`}
-                                  title={`Call ${lead.phone}`}
-                                  className="p-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition"
-                                >
-                                  <Phone size={12} />
-                                </a>
-                                <a
-                                  href={waUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  title="WhatsApp chat"
-                                  className="p-1.5 rounded-lg bg-teal-50 text-teal-800 hover:bg-teal-100 border border-teal-200 transition"
-                                >
-                                  <MessageCircle size={12} />
-                                </a>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Latest update snippet - Only if meaningful note exists */}
-                          {hasCurrentUpdate && (
-                            <p
-                              onClick={() => {
-                                setUpdateModalLead(lead);
-                                setUpdateText(lead.currentUpdate);
-                              }}
-                              className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100 line-clamp-2 cursor-pointer hover:bg-slate-100 transition"
-                              title="Click to view update history"
-                            >
-                              {lead.currentUpdate}
-                            </p>
-                          )}
-
-                          {/* 1-Click Advance Stage Button & Actions */}
-                          <div className="flex items-center justify-between gap-1 pt-2 border-t border-slate-100 text-xs">
-                            {stage.id !== "Won" && stage.id !== "Lost" ? (
-                              <button
-                                type="button"
-                                onClick={() => handleAdvanceStage(lead)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition shadow-xs"
-                                title="Move to next pipeline stage"
-                              >
-                                <span>Advance</span>
-                                <ArrowRight size={12} />
-                              </button>
-                            ) : (
-                              <span className="text-[10px] font-bold text-slate-400">
-                                Final stage
-                              </span>
-                            )}
-
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
+                            {/* Scheduled Site Visit Highlight - Only if scheduled */}
+                            {hasVisit && (
+                              <div
                                 onClick={() =>
                                   openActionModal(lead, "Site Visit")
                                 }
-                                title="Schedule Visit"
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition"
+                                className={`rounded-xl p-2.5 text-xs font-bold flex items-center justify-between cursor-pointer border transition ${
+                                  isVisitToday
+                                    ? "bg-amber-500 text-white border-amber-600 shadow-xs animate-pulse"
+                                    : "bg-amber-50 text-amber-950 border-amber-200 hover:bg-amber-100"
+                                }`}
+                                title="Click to view/reschedule visit"
                               >
-                                <Calendar size={14} />
-                              </button>
-                              <button
-                                type="button"
+                                <span className="flex items-center gap-1.5">
+                                  <CalendarClock size={13} className="shrink-0" />
+                                  <span>
+                                    {isVisitToday ? "TODAY" : lead.siteVisitDate}{" "}
+                                    {lead.siteVisitTime
+                                      ? formatTime(lead.siteVisitTime)
+                                      : ""}
+                                  </span>
+                                </span>
+                                <span className="text-[10px] uppercase font-bold underline decoration-dashed">
+                                  Edit
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Phone & Quick Contact */}
+                            {hasPhone && (
+                              <div className="flex items-center justify-between gap-2 text-xs pt-0.5">
+                                <span className="font-mono font-bold text-slate-800 text-[11px]">
+                                  {lead.phone.trim()}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  <a
+                                    href={`tel:${lead.phone.trim()}`}
+                                    title={`Call ${lead.phone}`}
+                                    className="p-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition"
+                                  >
+                                    <Phone size={12} />
+                                  </a>
+                                  <a
+                                    href={waUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title="WhatsApp chat"
+                                    className="p-1.5 rounded-lg bg-teal-50 text-teal-800 hover:bg-teal-100 border border-teal-200 transition"
+                                  >
+                                    <MessageCircle size={12} />
+                                  </a>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Latest update snippet */}
+                            {hasCurrentUpdate && (
+                              <p
                                 onClick={() => {
-                                  setLeadForm({
-                                    ...blankLead(user),
-                                    ...lead,
-                                  });
-                                  setEditingId(lead.id);
-                                  setShowLeadModal(true);
+                                  setUpdateModalLead(lead);
+                                  setUpdateText(lead.currentUpdate);
                                 }}
-                                title="Edit"
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition"
+                                className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100 line-clamp-2 cursor-pointer hover:bg-slate-100 transition"
+                                title="Click to view update history"
                               >
-                                <Pencil size={14} />
-                              </button>
+                                {lead.currentUpdate}
+                              </p>
+                            )}
+
+                            {/* 1-Click Advance Stage Button & Actions */}
+                            <div className="flex items-center justify-between gap-1 pt-2 border-t border-slate-100 text-xs">
+                              {stage.id !== "Won" && stage.id !== "Lost" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdvanceStage(lead)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 transition shadow-xs"
+                                  title="Move to next pipeline stage"
+                                >
+                                  <span>Advance</span>
+                                  <ArrowRight size={12} />
+                                </button>
+                              ) : (
+                                <span className="text-[10px] font-bold text-slate-400">
+                                  {stage.id === "Won" ? "🎉 Closed Deal" : "Dropped"}
+                                </span>
+                              )}
+
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    openActionModal(lead, "Site Visit")
+                                  }
+                                  title="Schedule Visit"
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition"
+                                >
+                                  <Calendar size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setLeadForm({
+                                      ...blankLead(user),
+                                      ...lead,
+                                    });
+                                    setEditingId(lead.id);
+                                    setShowLeadModal(true);
+                                  }}
+                                  title="Edit full lead details"
+                                  className="px-2 py-1 rounded-lg text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition"
+                                >
+                                  Details
+                                </button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })
-                  )}
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -2863,6 +3007,22 @@ Thank you!
             </div>
           </div>
         </div>
+      )}
+
+      {/* Reschedule Visit Modal */}
+      {rescheduleItem && (
+        <RescheduleModal
+          isOpen={Boolean(rescheduleItem)}
+          item={rescheduleItem}
+          onClose={() => setRescheduleItem(null)}
+          onSuccess={(updated) => {
+            loadAllData();
+            showNotification(
+              `Site visit for "${updated.name}" has been rescheduled.`,
+              "success"
+            );
+          }}
+        />
       )}
     </div>
   );

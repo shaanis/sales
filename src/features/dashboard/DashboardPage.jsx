@@ -15,11 +15,13 @@ import {
   Users,
   MapPin,
   Sparkles,
+  RotateCw,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthProvider";
 import { listRecords, updateRecord } from "../../lib/data";
+import RescheduleModal from "../../components/RescheduleModal";
 import { TA_RATE_PER_KM } from "../reports/model";
 import {
   formatTime,
@@ -35,6 +37,7 @@ export default function DashboardPage() {
   const [expenses, setExpenses] = useState([]);
   const [followups, setFollowups] = useState([]);
   const [leads, setLeads] = useState([]);
+  const [rescheduleItem, setRescheduleItem] = useState(null);
   const [note, setNote] = useState("");
 
   useEffect(() => {
@@ -318,11 +321,11 @@ export default function DashboardPage() {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-1.5 w-full sm:w-auto">
+                  <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 w-full sm:w-auto">
                     {item.phone && (
                       <a
                         href={`tel:${item.phone}`}
-                        className="flex-1 sm:flex-initial py-2 px-3 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center justify-center gap-1 transition active:scale-95"
+                        className="py-2 px-3 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center justify-center gap-1 transition active:scale-95"
                       >
                         <Phone size={12} />
                         <span>Call</span>
@@ -334,12 +337,22 @@ export default function DashboardPage() {
                         href={waUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 sm:flex-initial py-2 px-3 rounded-xl text-xs font-bold bg-white text-teal-800 border border-teal-200 hover:bg-teal-50 flex items-center justify-center gap-1 transition active:scale-95"
+                        className="py-2 px-3 rounded-xl text-xs font-bold bg-white text-teal-800 border border-teal-200 hover:bg-teal-50 flex items-center justify-center gap-1 transition active:scale-95"
                       >
                         <MessageCircle size={12} />
                         <span>WhatsApp</span>
                       </a>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={() => setRescheduleItem(item)}
+                      className="py-2 px-3 rounded-xl text-xs font-bold bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 flex items-center justify-center gap-1 transition active:scale-95"
+                      title="Customer not home / busy / reschedule date"
+                    >
+                      <RotateCw size={12} className="text-amber-700" />
+                      <span>Reschedule</span>
+                    </button>
 
                     <button
                       type="button"
@@ -539,6 +552,20 @@ export default function DashboardPage() {
           </div>
         )}
       </section>
+
+      {/* Reschedule Visit Modal */}
+      {rescheduleItem && (
+        <RescheduleModal
+          isOpen={Boolean(rescheduleItem)}
+          item={rescheduleItem}
+          onClose={() => setRescheduleItem(null)}
+          onSuccess={() => {
+            if (user?.uid) {
+              listRecords(user.uid, "followups").then((f) => setFollowups(f || []));
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

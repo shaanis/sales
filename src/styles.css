@@ -799,6 +799,18 @@ tr:last-child td {
   font-weight: 500;
 }
 
+/* Hide scrollbar across all browsers while maintaining full scrolling */
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .history-total strong {
   display: block;
   margin-top: 3px;

@@ -275,3 +275,53 @@ Please feel free to reach out if you need any adjustments to the schedule. Thank
 
   return `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(message)}`;
 }
+
+/**
+ * Generate WhatsApp message URL to confirm rescheduled/postponed visit
+ */
+export function generateRescheduledWhatsAppUrl(
+  item,
+  newDate,
+  newTime,
+  reason = "",
+  executiveName = ""
+) {
+  if (!item || !item.phone) return "";
+
+  const phone = item.phone.replace(/\D/g, "");
+  const formattedPhone = phone.length === 10 ? `91${phone}` : phone;
+
+  const rep = executiveName || "ECHONIX Solar Team";
+  const name = item.name ? `${item.name} Sir` : "Sir";
+  const place = item.area ? ` (${item.area})` : "";
+  const timeFormatted = newTime ? ` at ${formatTime(newTime)}` : "";
+
+  let message = "";
+  if (newDate) {
+    const dateFormatted = newDate.split("-").reverse().join("/");
+    message = `Hello ${name},
+Greetings from *ECHONIX Solar*! ☀️
+This is ${rep}.
+
+As discussed over phone today, our ${item.type || "Site Visit"}${place} has been rescheduled to:
+📅 *${dateFormatted}${timeFormatted}*
+
+Looking forward to meeting you on the revised date. Please feel free to let us know if any change is needed.
+
+Thank you!
+*ECHONIX Solar Solutions*`;
+  } else {
+    message = `Hello ${name},
+Greetings from *ECHONIX Solar*! ☀️
+This is ${rep}.
+
+We connected regarding our ${item.type || "Site Visit"} scheduled for today${place}. As requested, we have postponed the visit for now. We will follow up with you shortly to fix a convenient new date.
+
+Thank you!
+*ECHONIX Solar Solutions*`;
+  }
+
+  return `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(
+    message
+  )}`;
+}

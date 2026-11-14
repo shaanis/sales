@@ -14,6 +14,7 @@ import {
   Phone,
   MessageCircle,
   X,
+  Check,
   MapPin,
   Clock,
   Sparkles,
@@ -37,6 +38,7 @@ import {
 } from "../features/followups/notificationHelper";
 import NetworkStatusBadge from "./NetworkStatusBadge";
 import MobileInstallBanner from "./MobileInstallBanner";
+import RescheduleModal from "./RescheduleModal";
 import { useNetworkStatus, usePwaInstallPrompt } from "../pwa/registerServiceWorker";
 
 export default function AppShell({ children }) {
@@ -47,6 +49,7 @@ export default function AppShell({ children }) {
   const [todayFollowupsCount, setTodayFollowupsCount] = useState(0);
   const [pendingLeadsCount, setPendingLeadsCount] = useState(0);
   const [activeAlarmItem, setActiveAlarmItem] = useState(null);
+  const [rescheduleAlarmItem, setRescheduleAlarmItem] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const { isOnline } = useNetworkStatus();
@@ -307,14 +310,14 @@ export default function AppShell({ children }) {
                 </p>
               )}
 
-              <div className="flex items-center gap-2 pt-2">
+              <div className="grid grid-cols-2 gap-2 pt-2">
                 {activeAlarmItem.phone && (
                   <>
                     <a
                       href={`tel:${activeAlarmItem.phone}`}
-                      className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition shadow-md active:scale-95"
+                      className="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95"
                     >
-                      <Phone size={15} />
+                      <Phone size={14} />
                       <span>Call Now</span>
                     </a>
                     <a
@@ -325,20 +328,30 @@ export default function AppShell({ children }) {
                       )}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition shadow-md active:scale-95"
+                      className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95"
                     >
-                      <MessageCircle size={15} />
+                      <MessageCircle size={14} />
                       <span>WhatsApp</span>
                     </a>
                   </>
                 )}
                 <button
                   type="button"
+                  onClick={() => setRescheduleAlarmItem(activeAlarmItem)}
+                  className="py-2.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition active:scale-95 shadow-2xs"
+                  title="Customer not home / busy / reschedule date"
+                >
+                  <CalendarClock size={14} className="text-amber-700" />
+                  <span>Reschedule</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => completeAlarmItem(activeAlarmItem)}
-                  className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl transition"
+                  className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition active:scale-95"
                   title="Mark as completed"
                 >
-                  <X size={16} />
+                  <Check size={14} />
+                  <span>Mark Done</span>
                 </button>
               </div>
             </div>
@@ -346,8 +359,22 @@ export default function AppShell({ children }) {
         </div>
       )}
 
+      {/* Reschedule Visit Modal for Alarm Item */}
+      {rescheduleAlarmItem && (
+        <RescheduleModal
+          isOpen={Boolean(rescheduleAlarmItem)}
+          item={rescheduleAlarmItem}
+          onClose={() => setRescheduleAlarmItem(null)}
+          onSuccess={() => {
+            dismissAlarm();
+            setupAlarms();
+            setRescheduleAlarmItem(null);
+          }}
+        />
+      )}
+
       {/* Desktop Sidebar (visible on screens >= 1024px) */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-[#2b494e] bg-[#102b32] text-[#d7e6e7] lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-[#2b494e] bg-[#102b32] text-[#d7e6e7] lg:flex no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {/* Brand */}
         <div className="flex shrink-0 items-center justify-between border-b border-[#2b494e] px-5 py-6">
           <div className="flex items-center gap-3">
@@ -379,8 +406,8 @@ export default function AppShell({ children }) {
           )}
         </div>
 
-        {/* Navigation */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-6">
+        {/* Navigation with hidden scrollbar */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden px-4 py-6">
           <p className="mb-3 px-3 text-[10px] font-bold tracking-[1.5px] text-[#8ba7aa]">
             WORKSPACE
           </p>
