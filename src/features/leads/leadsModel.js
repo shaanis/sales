@@ -448,3 +448,136 @@ Thank you!
     message
   )}`;
 }
+
+/**
+ * Robust date parser supporting YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, and ISO strings
+ */
+export function parseDateValue(val) {
+  if (!val) return null;
+  if (typeof val === "number") return new Date(val);
+  if (typeof val !== "string") return null;
+
+  const trimmed = val.trim();
+  if (!trimmed) return null;
+
+  // 1. ISO or YYYY-MM-DD
+  const isoMatch = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (isoMatch) {
+    const y = parseInt(isoMatch[1], 10);
+    const m = parseInt(isoMatch[2], 10) - 1;
+    const d = parseInt(isoMatch[3], 10);
+    return new Date(y, m, d);
+  }
+
+  // 2. DD/MM/YYYY or DD-MM-YYYY
+  const dmyMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+  if (dmyMatch) {
+    const d = parseInt(dmyMatch[1], 10);
+    const m = parseInt(dmyMatch[2], 10) - 1;
+    const y = parseInt(dmyMatch[3], 10);
+    return new Date(y, m, d);
+  }
+
+  const parsed = new Date(trimmed);
+  if (!isNaN(parsed.getTime())) {
+    return parsed;
+  }
+
+  return null;
+}
+
+/**
+ * Calculates days of inactivity since last action, call, site visit or update
+ */
+export function getDaysInactive(lead, referenceDate = new Date()) {
+  if (!lead) return 0;
+
+  const timestamps = [];
+
+  // Check update history
+  if (Array.isArray(lead.updates) && lead.updates.length > 0) {
+    for (const u of lead.updates) {
+      const d = parseDateValue(u.date);
+      if (d) timestamps.push(d.getTime());
+    }
+  }
+
+  // Check lastCallDate / firstCallDate
+  if (lead.lastCallDate) {
+    const d = parseDateValue(lead.lastCallDate);
+    if (d) timestamps.push(d.getTime());
+  }
+  if (lead.firstCallDate) {
+    const d = parseDateValue(lead.firstCallDate);
+    if (d) timestamps.push(d.getTime());
+  }
+
+  // Check siteVisitDate
+  if (lead.siteVisitDate) {
+    const d = parseDateValue(lead.siteVisitDate);
+    if (d) timestamps.push(d.getTime());
+  }
+
+  // Check created / updated timestamps
+  if (lead.updatedAt) {
+    const d = parseDateValue(lead.updatedAt);
+    if (d) timestamps.push(d.getTime());
+  }
+  if (lead.createdAt) {
+    const d = parseDateValue(lead.createdAt);
+    if (d) timestamps.push(d.getTime());
+  }
+
+  if (timestamps.length === 0) {
+    return 0;
+  }
+
+  const latest = Math.max(...timestamps);
+  const now = referenceDate.getTime();
+  const diffDays = Math.floor((now - latest) / (1000 * 60 * 60 * 24));
+  return Math.max(0, diffDays);
+}
+
+/**
+ * A lead is dormant if it is active (not Won or Lost) and inactive for >= thresholdDays (default 14 days)
+ */
+export function isLeadDormant(lead, thresholdDays = 14) {
+  if (!lead) return false;
+  if (lead.status === "Won" || lead.status === "Lost") return false;
+  const days = getDaysInactive(lead);
+  return days >= thresholdDays;
+}
+
+/**
+ * Generate a friendly high-converting WhatsApp message to re-engage cold / dormant solar leads
+ */
+export function generateDormantLeadWhatsAppUrl(lead, executiveName = "") {
+  if (!lead || !lead.phone) return "";
+
+  const phone = lead.phone.replace(/\D/g, "");
+  const formattedPhone = phone.length === 10 ? `91${phone}` : phone;
+
+  const rep = executiveName || "ECHONIX Solar";
+  const name = lead.name ? `${lead.name} Sir` : "Sir/Madam";
+  const place = lead.section ? ` at ${lead.section}` : "";
+
+  const message = `Hello ${name},
+Greetings from *ECHONIX Solar*! ☀️
+This is ${rep}. 
+
+We had earlier discussed rooftop solar installation for your residence${place}.
+
+We have exciting new updates:
+1. *PM Surya Ghar Central Subsidy* is currently active (Direct bank credit up to *₹78,000*).
+2. Priority fast-track net-metering & special seasonal installation slots are open for this month.
+
+Would you like a quick review of your electricity bill savings or an updated free estimation? Please let me know when you are free for a 2-minute call.
+
+Best regards,
+*ECHONIX Solar Solutions*`;
+
+  return `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${encodeURIComponent(
+    message
+  )}`;
+}
+

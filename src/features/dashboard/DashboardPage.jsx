@@ -16,6 +16,7 @@ import {
   MapPin,
   Sparkles,
   RotateCw,
+  Sun,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -28,7 +29,12 @@ import {
   generateCustomerWhatsAppUrl,
   checkAndNotifyFollowups,
 } from "../followups/notificationHelper";
-import { generateLeadWhatsAppUrl } from "../leads/leadsModel";
+import {
+  generateLeadWhatsAppUrl,
+  isLeadDormant,
+  generateDormantLeadWhatsAppUrl,
+  getDaysInactive,
+} from "../leads/leadsModel";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -77,15 +83,54 @@ export default function DashboardPage() {
   const today = new Date().toLocaleDateString("en-CA");
   const month = today.slice(0, 7);
 
-  // Today's scheduled followups / visits
+  // Today's scheduled followups / visits (Unified from followups + leads)
   const todayFollowups = useMemo(() => {
-    return followups.filter(
-      (f) =>
+    const list = [];
+
+    // 1. From followups collection for today
+    followups.forEach((f) => {
+      if (
         f.date === today &&
         f.status !== "Completed" &&
         f.status !== "Cancelled"
-    );
-  }, [followups, today]);
+      ) {
+        list.push({
+          ...f,
+          isFollowupRecord: true,
+          followupId: f.id,
+          leadId: f.leadId,
+        });
+      }
+    });
+
+    // 2. From leads with siteVisitDate === today
+    leads.forEach((l) => {
+      if (
+        l.siteVisitDate === today &&
+        l.status !== "Lost" &&
+        l.visitStatus !== "Completed" &&
+        !list.some(
+          (p) => p.leadId === l.id || (p.phone && l.phone && p.phone === l.phone)
+        )
+      ) {
+        list.push({
+          id: "lead_visit_" + l.id,
+          isFollowupRecord: false,
+          leadId: l.id,
+          name: l.name,
+          phone: l.phone,
+          area: l.section,
+          time: l.siteVisitTime || "11:00",
+          type: "Site Visit",
+          status: l.visitStatus === "Completed" ? "Completed" : "Scheduled",
+          notes: l.siteVisitNotes || l.currentUpdate || "",
+          requirement: l.requirement || "",
+        });
+      }
+    });
+
+    return list.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+  }, [followups, leads, today]);
 
   // Distinct days logged this month
   const uniqueMonthlyReports = useMemo(() => {
@@ -101,6 +146,11 @@ export default function DashboardPage() {
   // Leads pending first call
   const pendingLeads = useMemo(() => {
     return leads.filter((l) => l.callStatus === "Pending");
+  }, [leads]);
+
+  // Dormant leads needing revival (14+ days inactive)
+  const dormantLeads = useMemo(() => {
+    return leads.filter((l) => isLeadDormant(l, 14));
   }, [leads]);
 
   const monthlyExpenses = expenses.filter((expense) =>
@@ -130,13 +180,29 @@ export default function DashboardPage() {
   async function markFollowupComplete(item) {
     if (!user?.uid) return;
     try {
-      await updateRecord(user.uid, "followups", item.id, {
-        status: "Completed",
-        completedAt: new Date().toISOString(),
-      });
-      setFollowups((prev) =>
-        prev.map((f) => (f.id === item.id ? { ...f, status: "Completed" } : f))
-      );
+      if (item.isFollowupRecord && item.followupId) {
+        await updateRecord(user.uid, "followups", item.followupId, {
+          status: "Completed",
+          completedAt: new Date().toISOString(),
+        });
+        setFollowups((prev) =>
+          prev.map((f) =>
+            f.id === item.followupId ? { ...f, status: "Completed" } : f
+          )
+        );
+      } else if (item.leadId) {
+        await updateRecord(user.uid, "leads", item.leadId, {
+          visitStatus: "Completed",
+          status: "Visited",
+        });
+        setLeads((prev) =>
+          prev.map((l) =>
+            l.id === item.leadId
+              ? { ...l, visitStatus: "Completed", status: "Visited" }
+              : l
+          )
+        );
+      }
     } catch (err) {
       console.error("Failed to complete:", err);
     }
@@ -159,7 +225,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick Shortcut Buttons (Thumb-friendly row on mobile) */}
-        <div className="grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex sm:items-center">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto sm:flex sm:items-center">
           <Link
             className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 active:scale-95 transition"
             to="/leads"
@@ -174,6 +240,15 @@ export default function DashboardPage() {
           >
             <CalendarClock size={15} className="text-amber-500 shrink-0" />
             <span className="truncate">Visits {todayFollowups.length > 0 ? `(${todayFollowups.length})` : ""}</span>
+          </Link>
+
+          <Link
+            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900 shadow-xs hover:bg-amber-100 active:scale-95 transition"
+            to="/calculator"
+            title="Solar Sizer & Quotation"
+          >
+            <Sun size={15} className="text-amber-600 shrink-0" />
+            <span className="truncate">Solar Quote</span>
           </Link>
 
           <Link
@@ -362,6 +437,98 @@ export default function DashboardPage() {
                       <CheckCircle2 size={13} />
                       <span>Done</span>
                     </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Dormant Leads Reviver Banner (Radar Widget) */}
+      {dormantLeads.length > 0 && (
+        <section className="rounded-2xl border border-amber-300/80 bg-gradient-to-br from-amber-50/70 via-white to-orange-50/50 p-3.5 sm:p-5 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-amber-200/80">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-amber-500/20">
+                <RotateCw size={17} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-xs sm:text-sm font-black text-slate-900 truncate">
+                    Dormant Leads Reviver ({dormantLeads.length})
+                  </h2>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                    14+ Days Inactive
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 truncate">
+                  Re-engage stale solar inquiries with 1-click WhatsApp subsidy updates
+                </p>
+              </div>
+            </div>
+
+            <Link
+              to="/leads?filter=dormant"
+              className="text-xs font-black text-amber-950 bg-amber-200 hover:bg-amber-300 px-3 py-1.5 rounded-xl transition text-center shrink-0 self-start sm:self-auto"
+            >
+              Open Revive Radar →
+            </Link>
+          </div>
+
+          <div className="mt-2.5 divide-y divide-amber-100/70">
+            {dormantLeads.slice(0, 3).map((lead) => {
+              const waReviveUrl = generateDormantLeadWhatsAppUrl(
+                lead,
+                user?.displayName
+              );
+              const daysInactive = getDaysInactive(lead);
+
+              return (
+                <div
+                  key={lead.id}
+                  className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <strong className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                        {lead.name}
+                      </strong>
+                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded uppercase bg-slate-100 text-slate-700">
+                        {lead.status}
+                      </span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100/80 text-amber-900 border border-amber-200">
+                        ⏳ {daysInactive}d cold
+                      </span>
+                      {lead.section && (
+                        <span className="text-[11px] text-slate-600 flex items-center gap-0.5 font-medium">
+                          <MapPin size={11} className="text-teal-600 shrink-0" />
+                          <span className="truncate">{lead.section}</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                      {lead.currentUpdate || "No recent activity logged"}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
+                    <a
+                      href={`tel:${lead.phone}`}
+                      className="py-2 px-3 rounded-xl text-xs font-bold bg-slate-800 text-white hover:bg-slate-900 flex items-center justify-center gap-1.5 transition shadow-xs active:scale-95"
+                    >
+                      <Phone size={13} />
+                      <span>Call</span>
+                    </a>
+                    <a
+                      href={waReviveUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="py-2 px-3 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center justify-center gap-1.5 transition shadow-xs active:scale-95"
+                    >
+                      <MessageCircle size={13} />
+                      <span className="whitespace-nowrap">WhatsApp Revive</span>
+                    </a>
                   </div>
                 </div>
               );
@@ -561,7 +728,13 @@ export default function DashboardPage() {
           onClose={() => setRescheduleItem(null)}
           onSuccess={() => {
             if (user?.uid) {
-              listRecords(user.uid, "followups").then((f) => setFollowups(f || []));
+              Promise.all([
+                listRecords(user.uid, "followups"),
+                listRecords(user.uid, "leads").catch(() => []),
+              ]).then(([f, l]) => {
+                setFollowups(f || []);
+                setLeads(l || []);
+              });
             }
           }}
         />

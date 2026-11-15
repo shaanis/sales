@@ -13,6 +13,8 @@ import {
   Sparkles,
   RotateCcw,
   Plus,
+  Mic,
+  Zap,
 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
@@ -32,6 +34,8 @@ import {
   getPreviousReport,
   parseCount,
 } from "./model";
+import { autoCompileReportFromDailyActivity } from "./autoFillHelper";
+import VoiceReportModal from "./VoiceReportModal";
 
 const todayString = () => new Date().toLocaleDateString("en-CA");
 
@@ -54,6 +58,10 @@ export default function ReportPage() {
 
   const [reports, setReports] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [leads, setLeads] = useState([]);
+  const [followups, setFollowups] = useState([]);
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false);
+  const [autoFillSummary, setAutoFillSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState({ text: "", type: "info" });
@@ -70,18 +78,25 @@ export default function ReportPage() {
     if (!user?.uid) {
       setReports([]);
       setExpenses([]);
+      setLeads([]);
+      setFollowups([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
-      const [reportsData, expensesData] = await Promise.all([
-        listRecords(user.uid, "reports"),
-        listRecords(user.uid, "expenses"),
-      ]);
+      const [reportsData, expensesData, leadsData, followupsData] =
+        await Promise.all([
+          listRecords(user.uid, "reports"),
+          listRecords(user.uid, "expenses"),
+          listRecords(user.uid, "leads").catch(() => []),
+          listRecords(user.uid, "followups").catch(() => []),
+        ]);
       setReports(Array.isArray(reportsData) ? reportsData : []);
       setExpenses(Array.isArray(expensesData) ? expensesData : []);
+      setLeads(Array.isArray(leadsData) ? leadsData : []);
+      setFollowups(Array.isArray(followupsData) ? followupsData : []);
     } catch (err) {
       console.error("Failed to load records:", err);
       setNote({
@@ -211,6 +226,37 @@ export default function ReportPage() {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     handleDateChange(yesterday.toLocaleDateString("en-CA"));
+  }
+
+  // 1-Click Auto-Fill from today's field activity
+  function handleAutoFillToday() {
+    const result = autoCompileReportFromDailyActivity({
+      targetDate: report.date,
+      currentReport: report,
+      leads,
+      followups,
+      expenses,
+      allReports: reports,
+    });
+
+    setReport(result.compiledReport);
+    setAutoFillSummary(result.breakdown);
+    setNote({
+      text: "⚡ Auto-filled report using today's field CRM data & tomorrow's schedule!",
+      type: "success",
+    });
+  }
+
+  // Apply voice-dictated fields
+  function handleApplyVoice(extractedData) {
+    setReport((prev) => ({
+      ...prev,
+      ...extractedData,
+    }));
+    setNote({
+      text: `🎙️ Voice notes applied! Updated ${Object.keys(extractedData).length} fields.`,
+      type: "success",
+    });
   }
 
   // Check if multiple duplicate entries exist for current date
@@ -581,6 +627,67 @@ export default function ReportPage() {
             </span>
           </div>
 
+          {/* Smart Field Automation Bar: 1-Click Auto-Fill & Voice Assistant */}
+          <div className="mb-5 rounded-2xl bg-gradient-to-r from-teal-900 via-teal-800 to-[#102b32] p-4 text-white shadow-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-200 text-[10px] font-black uppercase tracking-wider">
+                  <Sparkles size={11} className="text-teal-300" /> Smart Field Automations
+                </span>
+                <h3 className="text-sm font-extrabold text-white mt-1">
+                  Save Time on the Road
+                </h3>
+                <p className="text-[11px] text-teal-200/80">
+                  Compile today&apos;s logged visits and leads in 1 click, or speak your daily update.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleAutoFillToday}
+                  className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
+                  title="Auto-calculate counts from today's leads, visits, and tomorrow's appointments"
+                >
+                  <Zap size={14} className="fill-slate-950" />
+                  <span>1-Click Auto-Fill</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setVoiceModalOpen(true)}
+                  className="px-3.5 py-2 rounded-xl bg-teal-500/30 hover:bg-teal-500/40 text-white font-extrabold text-xs flex items-center gap-1.5 border border-teal-400/30 transition active:scale-95 cursor-pointer"
+                  title="Speak your report in English or Malayalam"
+                >
+                  <Mic size={14} className="text-teal-300" />
+                  <span>Voice Assistant</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Auto-Fill Breakdown summary card if active */}
+            {autoFillSummary && (
+              <div className="mt-3 pt-3 border-t border-white/10 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                <div className="bg-white/10 rounded-lg p-2">
+                  <span className="text-teal-200 block text-[9px] font-bold uppercase">New Leads Today</span>
+                  <strong className="text-white text-xs">{autoFillSummary.detectedNewLeads} leads</strong>
+                </div>
+                <div className="bg-white/10 rounded-lg p-2">
+                  <span className="text-teal-200 block text-[9px] font-bold uppercase">Surveys Done</span>
+                  <strong className="text-white text-xs">{autoFillSummary.detectedSurveys} surveys</strong>
+                </div>
+                <div className="bg-white/10 rounded-lg p-2">
+                  <span className="text-teal-200 block text-[9px] font-bold uppercase">Payment Recorded</span>
+                  <strong className="text-emerald-300 text-xs">₹{autoFillSummary.detectedPaymentSum.toLocaleString('en-IN')}</strong>
+                </div>
+                <div className="bg-white/10 rounded-lg p-2">
+                  <span className="text-teal-200 block text-[9px] font-bold uppercase">Tomorrow Focus</span>
+                  <strong className="text-white text-xs">{autoFillSummary.detectedFocusItems.length} planned</strong>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Date and Executive selector */}
           <div className="form-grid">
             <Field label="Report date">
@@ -783,6 +890,13 @@ export default function ReportPage() {
           </div>
         </aside>
       </div>
+
+      {/* Voice Assistant Modal */}
+      <VoiceReportModal
+        isOpen={voiceModalOpen}
+        onClose={() => setVoiceModalOpen(false)}
+        onApplyExtracted={handleApplyVoice}
+      />
     </>
   );
 }

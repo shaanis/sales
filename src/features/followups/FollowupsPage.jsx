@@ -1059,18 +1059,35 @@ export default function FollowupsPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => {
-                  setFormOpen(false);
-                  setEditingId(null);
-                }}
-                className="btn secondary"
-                disabled={saving}
-              >
-                Cancel
-              </button>
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100 flex-wrap gap-2">
+              {editingId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentItem = items.find((i) => i.id === editingId);
+                    setFormOpen(false);
+                    setEditingId(null);
+                    if (currentItem) setRescheduleItem(currentItem);
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 transition inline-flex items-center gap-1.5 active:scale-95 shadow-xs"
+                >
+                  <RotateCw size={13} className="text-amber-700" />
+                  <span>Reschedule Visit</span>
+                </button>
+              )}
+
+              <div className="flex items-center gap-3 ml-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormOpen(false);
+                    setEditingId(null);
+                  }}
+                  className="btn secondary"
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
 
               <button
                 type="submit"
@@ -1357,7 +1374,7 @@ export default function FollowupsPage() {
                         </a>
                       )}
 
-                      {!isDone && (
+                      {item.status !== "Cancelled" && (
                         <button
                           type="button"
                           onClick={() => setRescheduleItem(item)}

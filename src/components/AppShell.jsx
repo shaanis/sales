@@ -26,6 +26,7 @@ import {
   Share,
   Wifi,
   WifiOff,
+  Sun,
 } from "lucide-react";
 
 import { useAuth } from "../features/auth/AuthProvider";
@@ -115,6 +116,7 @@ export default function AppShell({ children }) {
       badge: todayFollowupsCount > 0 ? todayFollowupsCount : null,
     },
     { path: "/report", label: "Daily report", Icon: ClipboardList },
+    { path: "/calculator", label: "Solar Quote & Sizer", Icon: Sun },
     { path: "/expenses", label: "Travel & expenses", Icon: CarFront },
     {
       path: "/expense-history",
@@ -127,6 +129,13 @@ export default function AppShell({ children }) {
 
   // Secondary items shown inside the "More" mobile bottom sheet
   const secondaryNavigation = [
+    {
+      path: "/calculator",
+      label: "Solar Sizer & Quotation",
+      desc: "Calculate KSEB savings & generate instant quote",
+      Icon: Sun,
+      color: "bg-amber-50 text-amber-700",
+    },
     {
       path: "/expenses",
       label: "Travel & Expenses",
@@ -159,9 +168,14 @@ export default function AppShell({ children }) {
 
   // Check if current route is in secondary navigation
   const isSecondaryActive = useMemo(() => {
-    return ["/expenses", "/expense-history", "/history", "/settlements"].includes(
-      location.pathname
-    );
+    return [
+      "/calculator",
+      "/solar-quote",
+      "/expenses",
+      "/expense-history",
+      "/history",
+      "/settlements",
+    ].includes(location.pathname);
   }, [location.pathname]);
 
   // Active page title for the mobile top bar
@@ -175,6 +189,9 @@ export default function AppShell({ children }) {
         return "Visits & Appointments";
       case "/report":
         return "Daily Sales Report";
+      case "/calculator":
+      case "/solar-quote":
+        return "Solar Sizer & Quotation";
       case "/expenses":
         return "Travel & Expenses";
       case "/expense-history":

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Users,
   Phone,
@@ -42,6 +42,7 @@ import {
   MessageSquare,
   CheckCircle,
   SlidersHorizontal,
+  Sun,
 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
@@ -63,6 +64,9 @@ import {
   blankLead,
   parseLeadsText,
   generateLeadWhatsAppUrl,
+  getDaysInactive,
+  isLeadDormant,
+  generateDormantLeadWhatsAppUrl,
 } from "./leadsModel";
 import {
   scheduleExactAlarms,
@@ -76,6 +80,7 @@ const todayString = () => new Date().toLocaleDateString("en-CA");
 
 export default function LeadsPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
 
   const [leads, setLeads] = useState([]);
   const [followups, setFollowups] = useState([]);
@@ -87,6 +92,7 @@ export default function LeadsPage() {
   const [viewMode, setViewMode] = useState("table");
   const [hideEmptyStages, setHideEmptyStages] = useState(true);
   const [boardStageFilter, setBoardStageFilter] = useState("all");
+  const [showDormantRadar, setShowDormantRadar] = useState(true);
 
   // Sorting: 'visits_first' | 'newest' | 'calls_pending' | 'alphabetical'
   const [sortBy, setSortBy] = useState("visits_first");
@@ -97,6 +103,14 @@ export default function LeadsPage() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [sectionFilter, setSectionFilter] = useState("all");
   const [callStatusFilter, setCallStatusFilter] = useState("all");
+
+  // Sync URL search params (e.g. /leads?filter=dormant from dashboard)
+  useEffect(() => {
+    const filterParam = searchParams.get("filter");
+    if (filterParam === "dormant") {
+      setStageFilter("dormant");
+    }
+  }, [searchParams]);
 
   // Modals
   const [showImportModal, setShowImportModal] = useState(false);
@@ -866,6 +880,8 @@ export default function LeadsPage() {
           l.visitStatus === "Scheduled" ||
           (l.siteVisitDate && l.siteVisitDate >= today)
       );
+    } else if (stageFilter === "dormant") {
+      list = list.filter((l) => isLeadDormant(l, 14));
     } else if (stageFilter !== "all") {
       list = list.filter((l) => l.status === stageFilter);
     }
@@ -967,6 +983,11 @@ export default function LeadsPage() {
     return list;
   }, [filteredLeads, sortBy, today]);
 
+  // Dormant leads (inactive >= 14 days)
+  const dormantLeads = useMemo(() => {
+    return leads.filter((l) => isLeadDormant(l, 14));
+  }, [leads]);
+
   // Statistics
   const stats = useMemo(() => {
     const total = leads.length;
@@ -982,9 +1003,10 @@ export default function LeadsPage() {
     ).length;
     const won = leads.filter((l) => l.status === "Won").length;
     const lost = leads.filter((l) => l.status === "Lost").length;
+    const dormant = dormantLeads.length;
 
-    return { total, callPending, visitsScheduled, visitsDone, won, lost };
-  }, [leads, today]);
+    return { total, callPending, visitsScheduled, visitsDone, won, lost, dormant };
+  }, [leads, dormantLeads.length, today]);
 
   // WhatsApp generator for today's appointment
   function generateTodayAppointmentWa(plan) {
@@ -1305,12 +1327,145 @@ Thank you!
         </section>
       )}
 
+      {/* Dormant Leads Reviver (Revive Radar) */}
+      {dormantLeads.length > 0 && (
+        <section className="rounded-3xl border border-amber-300/80 bg-gradient-to-br from-amber-50/80 via-white to-orange-50/60 p-4 sm:p-5 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-amber-200/80">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+                <RotateCw className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
+                    Dormant Leads Reviver ({dormantLeads.length})
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-200">
+                    ❄️ 14+ Days Inactive
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Re-engage cold inquiries with 1-tap WhatsApp subsidy updates or quick phone follow-ups.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() =>
+                  setStageFilter(stageFilter === "dormant" ? "all" : "dormant")
+                }
+                className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition ${
+                  stageFilter === "dormant"
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {stageFilter === "dormant" ? "Showing All Leads" : "Filter in Table"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDormantRadar(!showDormantRadar)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-white/80 transition"
+                title="Toggle Radar preview"
+              >
+                {showDormantRadar ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+            </div>
+          </div>
+
+          {showDormantRadar && (
+            <div className="mt-3.5 space-y-2.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {dormantLeads.slice(0, 6).map((lead) => {
+                  const daysInactive = getDaysInactive(lead);
+                  const waReviveUrl = generateDormantLeadWhatsAppUrl(
+                    lead,
+                    user?.displayName
+                  );
+
+                  return (
+                    <div
+                      key={lead.id}
+                      className="bg-white/90 backdrop-blur-xs p-3.5 rounded-2xl border border-amber-200/70 shadow-xs hover:border-amber-300 transition flex flex-col justify-between gap-3"
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-bold text-slate-900 text-sm truncate">
+                            {lead.name}
+                          </h4>
+                          <span className="shrink-0 px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200">
+                            ⏳ {daysInactive}d cold
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 flex-wrap text-xs text-slate-500">
+                          <span className="px-1.5 py-0.5 rounded uppercase text-[9px] font-bold bg-slate-100 text-slate-700">
+                            {lead.status}
+                          </span>
+                          {lead.section && (
+                            <span className="flex items-center gap-0.5 text-slate-600 font-medium truncate">
+                              <MapPin size={11} className="text-teal-600 shrink-0" />
+                              <span className="truncate">{lead.section}</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {lead.currentUpdate && (
+                          <p className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100 line-clamp-2">
+                            {lead.currentUpdate}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                        <a
+                          href={`tel:${lead.phone}`}
+                          className="py-1.5 px-2.5 rounded-xl text-xs font-bold bg-slate-800 text-white hover:bg-slate-900 flex items-center justify-center gap-1 transition shadow-xs active:scale-95"
+                        >
+                          <Phone size={12} />
+                          <span>Call</span>
+                        </a>
+
+                        <a
+                          href={waReviveUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="py-1.5 px-2.5 rounded-xl text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center justify-center gap-1 transition shadow-xs active:scale-95"
+                        >
+                          <MessageCircle size={12} />
+                          <span className="whitespace-nowrap">WhatsApp Revive</span>
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {dormantLeads.length > 6 && (
+                <div className="pt-1 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setStageFilter("dormant")}
+                    className="text-xs font-bold text-amber-950 hover:underline inline-flex items-center gap-1"
+                  >
+                    View all {dormantLeads.length} dormant leads in pipeline →
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Top Metric Cards - Minimal & Compact (Horizontal scroll on mobile to avoid pushing content down) */}
-      <div className="flex overflow-x-auto gap-2 pb-1 no-scrollbar sm:grid sm:grid-cols-3 lg:grid-cols-6">
+      <div className="flex overflow-x-auto gap-2 pb-1 no-scrollbar sm:grid sm:grid-cols-4 lg:grid-cols-7">
         {[
           { id: "all", label: "Total Leads", count: stats.total },
           { id: "visits_due", label: "Visits Due", count: stats.visitsScheduled, isPriority: true },
           { id: "call_pending", label: "Call Pending", count: stats.callPending },
+          { id: "dormant", label: "Dormant (14d+)", count: stats.dormant, isDormant: true },
           { id: "Visited", label: "Survey Done", count: stats.visitsDone },
           { id: "Won", label: "Closed Won", count: stats.won },
           { id: "Lost", label: "Lost / Dropped", count: stats.lost },
@@ -1325,6 +1480,8 @@ Thank you!
                   ? "bg-slate-900 text-white border-slate-900 shadow-xs"
                   : m.isPriority && m.count > 0
                   ? "bg-amber-50/60 text-amber-950 border-amber-200 hover:border-amber-300"
+                  : m.isDormant && m.count > 0
+                  ? "bg-orange-50/60 text-orange-950 border-orange-200 hover:border-orange-300"
                   : "bg-white text-slate-800 border-slate-200 hover:border-slate-300"
               }`}
             >
@@ -1338,6 +1495,9 @@ Thank you!
                 </p>
                 {m.isPriority && m.count > 0 && !isSelected && (
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                )}
+                {m.isDormant && m.count > 0 && !isSelected && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
                 )}
               </div>
               <p className="text-lg sm:text-2xl font-black mt-0.5">{m.count}</p>
@@ -1440,6 +1600,22 @@ Thank you!
             <span>Priority Visits ({stats.visitsScheduled})</span>
           </button>
 
+          {/* Quick Dormant Button */}
+          <button
+            type="button"
+            onClick={() =>
+              setStageFilter(stageFilter === "dormant" ? "all" : "dormant")
+            }
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+              stageFilter === "dormant"
+                ? "bg-orange-600 text-white border-orange-700 shadow-xs"
+                : "bg-orange-50 text-orange-950 border-orange-200 hover:bg-orange-100"
+            }`}
+          >
+            <RotateCw size={12} />
+            <span>Dormant ({stats.dormant})</span>
+          </button>
+
           {/* Stage Filter */}
           <select
             value={stageFilter}
@@ -1449,6 +1625,7 @@ Thank you!
             <option value="all">All Stages</option>
             <option value="visits_due">📅 Site Visits Scheduled / Due</option>
             <option value="call_pending">⏳ Call Pending Only</option>
+            <option value="dormant">❄️ Dormant (14+ Days Inactive) ({stats.dormant})</option>
             {LEAD_STAGES.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.label}
@@ -1582,6 +1759,12 @@ Thank you!
                     CALL_STATUSES.find((c) => c.id === lead.callStatus) ||
                     CALL_STATUSES[0];
                   const waUrl = generateLeadWhatsAppUrl(lead, user?.displayName);
+                  const daysInactive = getDaysInactive(lead);
+                  const leadIsDormant = isLeadDormant(lead, 14);
+                  const waReviveUrl = generateDormantLeadWhatsAppUrl(
+                    lead,
+                    user?.displayName
+                  );
 
                   const isVisitToday =
                     lead.siteVisitDate === today &&
@@ -1618,6 +1801,15 @@ Thank you!
                           <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200">
                             {lead.source || "WA"}
                           </span>
+                          {leadIsDormant && (
+                            <span
+                              className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center gap-0.5"
+                              title={`Inactive for ${daysInactive} days - re-engagement recommended`}
+                            >
+                              <Clock size={9} />
+                              {daysInactive}d cold
+                            </span>
+                          )}
                         </div>
                         {lead.requirement && lead.requirement.trim() && (
                           <span className="inline-flex items-center gap-1 text-[9px] font-bold text-teal-800 bg-teal-50 px-1.5 py-0.2 rounded mt-0.5 border border-teal-200">
@@ -1655,11 +1847,19 @@ Thank you!
                                 <Phone size={12} />
                               </a>
                               <a
-                                href={waUrl}
+                                href={leadIsDormant ? waReviveUrl : waUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                title="WhatsApp Chat"
-                                className="p-1 rounded-md text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition"
+                                title={
+                                  leadIsDormant
+                                    ? "Send WhatsApp Subsidy Revival message"
+                                    : "WhatsApp Chat"
+                                }
+                                className={`p-1 rounded-md transition border ${
+                                  leadIsDormant
+                                    ? "text-emerald-700 bg-emerald-100 hover:bg-emerald-200 border-emerald-300 ring-1 ring-emerald-400/30"
+                                    : "text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200"
+                                }`}
                               >
                                 <MessageCircle size={12} />
                               </a>
@@ -1707,35 +1907,47 @@ Thank you!
                       {/* Site Visit */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
                         {lead.siteVisitDate && lead.siteVisitDate.trim() && lead.siteVisitDate.trim() !== "—" ? (
-                          <div className="inline-flex items-center gap-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <button
                               type="button"
                               onClick={() => openActionModal(lead, "Site Visit")}
                               className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg border ${
                                 isVisitToday
                                   ? "bg-amber-500 text-white border-amber-600 animate-pulse"
-                                  : "text-amber-900 bg-amber-50 border-amber-200"
+                                  : "text-amber-900 bg-amber-50 border-amber-200 hover:bg-amber-100"
                               }`}
                             >
-                              <CalendarClock size={10} />
+                              <CalendarClock size={11} />
                               <span>{isVisitToday ? "TODAY" : lead.siteVisitDate}</span>
                             </button>
                             <button
                               type="button"
                               onClick={() => setRescheduleItem(lead)}
-                              title="Reschedule / Postpone site visit"
-                              className="p-1 rounded text-slate-400 hover:text-amber-700 hover:bg-amber-50 transition"
+                              title="Customer not home / busy / reschedule date"
+                              className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-lg bg-amber-100 text-amber-950 border border-amber-300 hover:bg-amber-200 transition shadow-2xs active:scale-95"
                             >
-                              <RotateCw size={11} />
+                              <RotateCw size={10} className="text-amber-700" />
+                              <span>Reschedule</span>
                             </button>
                           </div>
+                        ) : lead.status === "Visit_Scheduled" ? (
+                          <button
+                            type="button"
+                            onClick={() => setRescheduleItem(lead)}
+                            title="Reschedule / Postpone site visit"
+                            className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-lg bg-amber-100 text-amber-950 border border-amber-300 hover:bg-amber-200 transition shadow-2xs active:scale-95"
+                          >
+                            <RotateCw size={10} className="text-amber-700" />
+                            <span>Reschedule</span>
+                          </button>
                         ) : (
                           <button
                             type="button"
                             onClick={() => openActionModal(lead, "Site Visit")}
-                            className="text-[10px] text-slate-400 hover:text-amber-700 font-medium"
+                            className="text-[10px] text-slate-400 hover:text-amber-700 font-medium inline-flex items-center gap-1"
                           >
-                            + Schedule
+                            <Plus size={10} />
+                            <span>Schedule</span>
                           </button>
                         )}
                       </td>
@@ -1766,7 +1978,30 @@ Thank you!
 
                       {/* Actions */}
                       <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Link
+                            to={`/calculator?leadId=${lead.id}&name=${encodeURIComponent(
+                              lead.name || ""
+                            )}&phone=${encodeURIComponent(
+                              lead.phone || ""
+                            )}&area=${encodeURIComponent(lead.section || "")}`}
+                            title="Calculate solar savings & send instant quote"
+                            className="px-2 py-1 rounded-lg text-[11px] font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition flex items-center gap-1 active:scale-95 shadow-2xs"
+                          >
+                            <Sun size={11} className="text-amber-500" />
+                            <span>Quote</span>
+                          </Link>
+
+                          <button
+                            type="button"
+                            onClick={() => setRescheduleItem(lead)}
+                            title="Customer not home / busy / reschedule visit"
+                            className="px-2 py-1 rounded-lg text-[11px] font-bold text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition flex items-center gap-1 active:scale-95 shadow-2xs"
+                          >
+                            <RotateCw size={11} className="text-amber-700" />
+                            <span>Reschedule</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => {
@@ -1923,6 +2158,12 @@ Thank you!
                           lead,
                           user?.displayName
                         );
+                        const daysInactive = getDaysInactive(lead);
+                        const leadIsDormant = isLeadDormant(lead, 14);
+                        const waReviveUrl = generateDormantLeadWhatsAppUrl(
+                          lead,
+                          user?.displayName
+                        );
                         const callObj =
                           CALL_STATUSES.find((c) => c.id === lead.callStatus) ||
                           CALL_STATUSES[0];
@@ -2025,26 +2266,33 @@ Thank you!
                               })}
                             </div>
 
-                            {/* Badges: Source + Call Status */}
-                            {(hasSource || hasCallStatus) && (
-                              <div className="flex items-center justify-between gap-2">
-                                {hasSource ? (
+                            {/* Badges: Source + Call Status + Dormant Indicator */}
+                            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {hasSource && (
                                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
                                     {lead.source.trim()}
                                   </span>
-                                ) : (
-                                  <span />
                                 )}
-
-                                {hasCallStatus && (
+                                {leadIsDormant && (
                                   <span
-                                    className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border ${callObj.badge}`}
+                                    className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center gap-0.5"
+                                    title={`Inactive for ${daysInactive} days`}
                                   >
-                                    {callObj.label}
+                                    <Clock size={9} />
+                                    {daysInactive}d cold
                                   </span>
                                 )}
                               </div>
-                            )}
+
+                              {hasCallStatus && (
+                                <span
+                                  className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full border ${callObj.badge}`}
+                                >
+                                  {callObj.label}
+                                </span>
+                              )}
+                            </div>
 
                             {/* Customer Name & Section / Requirement */}
                             <div>
@@ -2094,9 +2342,18 @@ Thank you!
                                       : ""}
                                   </span>
                                 </span>
-                                <span className="text-[10px] uppercase font-bold underline decoration-dashed">
-                                  Edit
-                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRescheduleItem(lead);
+                                  }}
+                                  className="text-[10px] font-black uppercase px-2 py-0.5 rounded-lg bg-white/95 text-amber-950 border border-amber-300 hover:bg-white transition flex items-center gap-1 shadow-2xs active:scale-95"
+                                  title="Customer not home / busy / reschedule date"
+                                >
+                                  <RotateCw size={10} className="text-amber-700" />
+                                  <span>Reschedule</span>
+                                </button>
                               </div>
                             )}
 
@@ -2115,11 +2372,19 @@ Thank you!
                                     <Phone size={12} />
                                   </a>
                                   <a
-                                    href={waUrl}
+                                    href={leadIsDormant ? waReviveUrl : waUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    title="WhatsApp chat"
-                                    className="p-1.5 rounded-lg bg-teal-50 text-teal-800 hover:bg-teal-100 border border-teal-200 transition"
+                                    title={
+                                      leadIsDormant
+                                        ? "Send WhatsApp Subsidy Revival message"
+                                        : "WhatsApp chat"
+                                    }
+                                    className={`p-1.5 rounded-lg border transition ${
+                                      leadIsDormant
+                                        ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-emerald-300 ring-1 ring-emerald-400/30"
+                                        : "bg-teal-50 text-teal-800 hover:bg-teal-100 border border-teal-200"
+                                    }`}
                                   >
                                     <MessageCircle size={12} />
                                   </a>
@@ -2160,6 +2425,28 @@ Thank you!
                               )}
 
                               <div className="flex items-center gap-1">
+                                <Link
+                                  to={`/calculator?leadId=${lead.id}&name=${encodeURIComponent(
+                                    lead.name || ""
+                                  )}&phone=${encodeURIComponent(
+                                    lead.phone || ""
+                                  )}&area=${encodeURIComponent(lead.section || "")}`}
+                                  title="Solar Sizer & Quote"
+                                  className="p-1.5 rounded-lg text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition"
+                                >
+                                  <Sun size={13} className="text-amber-500" />
+                                </Link>
+                                {(lead.siteVisitDate || lead.status === "Visit_Scheduled") && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setRescheduleItem(lead)}
+                                    title="Customer not home / busy / reschedule date"
+                                    className="px-2 py-1 rounded-lg text-[11px] font-bold text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition flex items-center gap-1 active:scale-95 shadow-2xs"
+                                  >
+                                    <RotateCw size={11} className="text-amber-700" />
+                                    <span>Reschedule</span>
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -2722,6 +3009,30 @@ Thank you!
                 />
               </div>
 
+              {/* Quick shortcut if customer asked to postpone / not home */}
+              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-amber-950 truncate">
+                    Customer Not Home / Postponed Date?
+                  </p>
+                  <p className="text-[11px] text-amber-800 truncate">
+                    Shift visit date and notify customer via WhatsApp
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = callModalLead;
+                    setCallModalLead(null);
+                    setRescheduleItem(target);
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition flex items-center justify-center gap-1.5 shrink-0 shadow-xs active:scale-95"
+                >
+                  <RotateCw size={12} />
+                  <span>Reschedule Visit</span>
+                </button>
+              </div>
+
               <div className="flex items-center justify-between pt-2">
                 <a
                   href={`tel:${callModalLead.phone}`}
@@ -2877,6 +3188,22 @@ Thank you!
                     Sync to <strong>Site Visits & Reminders</strong> (Triggers exact-time alarms)
                   </span>
                 </label>
+
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-xs text-slate-600 font-medium">Customer requested another date or not at home?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = actionModalLead;
+                      setActionModalLead(null);
+                      setRescheduleItem(target);
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 transition inline-flex items-center justify-center gap-1 active:scale-95 shrink-0"
+                  >
+                    <RotateCw size={11} className="text-amber-700" />
+                    <span>Reschedule Visit</span>
+                  </button>
+                </div>
 
                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                   <button
