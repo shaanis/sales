@@ -27,6 +27,7 @@ import {
   Wifi,
   WifiOff,
   Sun,
+  Banknote,
 } from "lucide-react";
 
 import { useAuth } from "../features/auth/AuthProvider";
@@ -117,6 +118,7 @@ export default function AppShell({ children }) {
     },
     { path: "/report", label: "Daily report", Icon: ClipboardList },
     { path: "/calculator", label: "Solar Quote & Sizer", Icon: Sun },
+    { path: "/solar-loan", label: "Solar Loan & Subsidy", Icon: Banknote },
     { path: "/expenses", label: "Travel & expenses", Icon: CarFront },
     {
       path: "/expense-history",
@@ -135,6 +137,13 @@ export default function AppShell({ children }) {
       desc: "Calculate KSEB savings & generate instant quote",
       Icon: Sun,
       color: "bg-amber-50 text-amber-700",
+    },
+    {
+      path: "/solar-loan",
+      label: "Solar Loan & Subsidy",
+      desc: "₹2L loan @ 6% diminishing & ₹78k subsidy payoff",
+      Icon: Banknote,
+      color: "bg-emerald-50 text-emerald-700",
     },
     {
       path: "/expenses",
@@ -171,6 +180,7 @@ export default function AppShell({ children }) {
     return [
       "/calculator",
       "/solar-quote",
+      "/solar-loan",
       "/expenses",
       "/expense-history",
       "/history",
@@ -192,6 +202,8 @@ export default function AppShell({ children }) {
       case "/calculator":
       case "/solar-quote":
         return "Solar Sizer & Quotation";
+      case "/solar-loan":
+        return "Solar Loan & Subsidy";
       case "/expenses":
         return "Travel & Expenses";
       case "/expense-history":

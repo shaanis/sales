@@ -13,6 +13,7 @@ import CashSettlementPage from "../features/settlements/CashSettlementPage";
 import FollowupsPage from "../features/followups/FollowupsPage";
 import LeadsPage from "../features/leads/LeadsPage";
 import SolarCalculatorPage from "../features/solar/SolarCalculatorPage";
+import SolarLoanPage from "../features/solar/SolarLoanPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -99,6 +100,17 @@ export default function App() {
           <ProtectedRoute>
             <AppShell>
               <SolarCalculatorPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/solar-loan"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <SolarLoanPage />
             </AppShell>
           </ProtectedRoute>
         }

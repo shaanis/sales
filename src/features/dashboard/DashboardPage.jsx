@@ -17,6 +17,7 @@ import {
   Sparkles,
   RotateCw,
   Sun,
+  Banknote,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -249,6 +250,15 @@ export default function DashboardPage() {
           >
             <Sun size={15} className="text-amber-600 shrink-0" />
             <span className="truncate">Solar Quote</span>
+          </Link>
+
+          <Link
+            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-900 shadow-xs hover:bg-emerald-100 active:scale-95 transition"
+            to="/solar-loan"
+            title="PM Surya Ghar Diminishing Loan & Subsidy Calculator"
+          >
+            <Banknote size={15} className="text-emerald-600 shrink-0" />
+            <span className="truncate">Solar Loan</span>
           </Link>
 
           <Link

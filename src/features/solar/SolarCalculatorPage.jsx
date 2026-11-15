@@ -24,6 +24,7 @@ import {
   Layers,
   CreditCard,
   MapPin,
+  Banknote,
 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
@@ -33,11 +34,14 @@ import {
   calculateSubsidy,
   estimateSizingFromBill,
   estimateSystemCost,
+  getEchonixPriceRange,
   estimatePanelCount,
   formatWhatsAppQuote,
   formatWhatsAppGroupBookingSpec,
 } from "./solarCalculatorModel";
 import { generateSolarQuotationPdf } from "./solarPdfGenerator";
+import SolarLoanCalculator from "./SolarLoanCalculator";
+import { formatWhatsAppLoanPitch } from "./solarLoanModel";
 
 export default function SolarCalculatorPage() {
   const { user } = useAuth();
@@ -69,11 +73,12 @@ export default function SolarCalculatorPage() {
   const [roofType, setRoofType] = useState("concrete flat  roof");
 
   // Pricing & Commercials
-  const [totalPrice, setTotalPrice] = useState("240000");
+  const [totalPrice, setTotalPrice] = useState("275000");
   const [withKsebCharge, setWithKsebCharge] = useState(true);
   const [paymentType, setPaymentType] = useState("Loan  amount 2 Lack");
   const [branch, setBranch] = useState("chandapadi, ponnani");
   const [includeCustomerHeader, setIncludeCustomerHeader] = useState(false);
+  const [showLoanCalculator, setShowLoanCalculator] = useState(false);
 
   // Client Details
   const [customerName, setCustomerName] = useState(queryName);
@@ -115,10 +120,15 @@ export default function SolarCalculatorPage() {
       .catch(() => {});
   }, [user?.uid, queryLeadId]);
 
-  // Sync defaults when kW changes
-  const syncSystemDefaults = (kw) => {
+  // Current ECHONIX company price range
+  const currentPriceRange = useMemo(() => {
+    return getEchonixPriceRange(systemKw, withOptimizer);
+  }, [systemKw, withOptimizer]);
+
+  // Sync defaults when kW or optimizer changes
+  const syncSystemDefaults = (kw, opt = withOptimizer) => {
     setInverterKw(kw);
-    const estCost = estimateSystemCost(kw);
+    const estCost = estimateSystemCost(kw, opt);
     setTotalPrice(String(estCost));
     const count = estimatePanelCount(kw, 554);
     setPanelCount(count);
@@ -127,7 +137,12 @@ export default function SolarCalculatorPage() {
 
   const handleKwChange = (kw) => {
     setSystemKw(kw);
-    syncSystemDefaults(kw);
+    syncSystemDefaults(kw, withOptimizer);
+  };
+
+  const handleOptimizerToggle = (opt) => {
+    setWithOptimizer(opt);
+    syncSystemDefaults(systemKw, opt);
   };
 
   const handleBillChange = (val) => {
@@ -136,7 +151,7 @@ export default function SolarCalculatorPage() {
     if (num > 0) {
       const sizing = estimateSizingFromBill(num);
       setSystemKw(sizing.recommendedKw);
-      syncSystemDefaults(sizing.recommendedKw);
+      syncSystemDefaults(sizing.recommendedKw, withOptimizer);
     }
   };
 
@@ -194,6 +209,23 @@ export default function SolarCalculatorPage() {
         branch,
         website: "https://echonix.in",
         includeCustomerHeader,
+      });
+    }
+
+    if (templateMode === "loan_pitch") {
+      const monthlyKseb = bimonthlyBill ? Math.round(Number(bimonthlyBill) / 2) : null;
+      return formatWhatsAppLoanPitch({
+        customerName: customerName || "Customer",
+        phone,
+        location,
+        systemKw: metrics.systemKw,
+        loanAmount: 200000,
+        annualInterestRate: 6.0,
+        subsidyAmount: metrics.subsidy || 78000,
+        monthlyPayment: 2500,
+        ksebMonthlyBill: monthlyKseb > 0 ? monthlyKseb : null,
+        branch,
+        website: "https://echonix.in",
       });
     }
 
@@ -427,10 +459,13 @@ export default function SolarCalculatorPage() {
                 <input
                   type="checkbox"
                   checked={withOptimizer}
-                  onChange={(e) => setWithOptimizer(e.target.checked)}
+                  onChange={(e) => handleOptimizerToggle(e.target.checked)}
                   className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4"
                 />
                 <span>with optimizer</span>
+                <span className="text-[10px] text-amber-900 font-extrabold bg-amber-200/80 px-1.5 py-0.5 rounded">
+                  +₹10k
+                </span>
               </label>
             </div>
 
@@ -656,9 +691,45 @@ export default function SolarCalculatorPage() {
                   type="number"
                   value={totalPrice}
                   onChange={(e) => setTotalPrice(e.target.value)}
-                  placeholder="e.g. 240000"
+                  placeholder="e.g. 275000"
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-extrabold text-slate-900 outline-none focus:border-teal-600"
                 />
+
+                {/* Official ECHONIX Rate Range Chips */}
+                <div className="mt-2 space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-500 font-bold">
+                      കമ്പനി നിരക്ക് ({systemKw}KW {withOptimizer ? "+ Optimizer" : "Normal"}):
+                    </span>
+                    <strong className="text-teal-800 font-black">
+                      ₹{currentPriceRange.min.toLocaleString('en-IN')} - ₹{currentPriceRange.max.toLocaleString('en-IN')}
+                    </strong>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setTotalPrice(String(currentPriceRange.min))}
+                      className={`text-[10px] font-extrabold px-2.5 py-1 rounded-lg border transition cursor-pointer ${
+                        Number(totalPrice) === currentPriceRange.min
+                          ? "bg-teal-700 text-white border-teal-700 shadow-2xs"
+                          : "bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100"
+                      }`}
+                    >
+                      ₹{currentPriceRange.min.toLocaleString('en-IN')} (Min)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTotalPrice(String(currentPriceRange.max))}
+                      className={`text-[10px] font-extrabold px-2.5 py-1 rounded-lg border transition cursor-pointer ${
+                        Number(totalPrice) === currentPriceRange.max
+                          ? "bg-teal-700 text-white border-teal-700 shadow-2xs"
+                          : "bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100"
+                      }`}
+                    >
+                      ₹{currentPriceRange.max.toLocaleString('en-IN')} (Max)
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Payment Type / Loan */}
@@ -673,6 +744,26 @@ export default function SolarCalculatorPage() {
                   placeholder="e.g. Loan  amount 2 Lack"
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-900 outline-none focus:border-teal-600"
                 />
+                <div className="flex gap-1.5 flex-wrap mt-1.5">
+                  {[
+                    "Loan  amount 2 Lack",
+                    "Loan  amount 1.5 Lack",
+                    "Cash / Direct Payment",
+                  ].map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setPaymentType(p)}
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md border transition ${
+                        paymentType === p
+                          ? "bg-slate-900 text-white border-slate-900"
+                          : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Branch */}
@@ -709,6 +800,65 @@ export default function SolarCalculatorPage() {
                     className="flex-1 min-w-[140px] rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-900 outline-none focus:border-teal-600"
                   />
                 </div>
+              </div>
+
+              {/* Diminishing Loan & Subsidy Payoff Banner Button */}
+              <div className="sm:col-span-2 pt-2 border-t border-slate-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-amber-50 border border-emerald-200">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-emerald-600 text-white shrink-0">
+                      <Banknote size={18} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-black uppercase text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
+                          DIMINISHING LOAN
+                        </span>
+                        <strong className="text-xs font-black text-slate-900">
+                          ₹2 ലക്ഷം ലോൺ @ 6% & ₹78k സബ്സിഡി കണക്ക്
+                        </strong>
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-0.5">
+                        മാസം ₹1500, ₹2500, ₹3000 വെച്ച് അടച്ചാൽ എത്ര വർഷം? സബ്സിഡി വന്നാൽ പലിശ എങ്ങനെ കുറയും?
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowLoanCalculator(!showLoanCalculator)}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-2xs active:scale-95 cursor-pointer"
+                    >
+                      {showLoanCalculator ? "Hide Calculator" : "Show Loan Calculator"}
+                    </button>
+                    <Link
+                      to="/solar-loan"
+                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition"
+                    >
+                      Full Page
+                    </Link>
+                  </div>
+                </div>
+
+                {showLoanCalculator && (
+                  <div className="mt-4">
+                    <SolarLoanCalculator
+                      initialLoanAmount={200000}
+                      initialSubsidy={metrics.subsidy || 78000}
+                      initialRate={6.0}
+                      systemKw={systemKw}
+                      customerName={customerName}
+                      phone={phone}
+                      location={location}
+                      branch={branch}
+                      onApplyToQuote={({ paymentType: newPaymentType }) => {
+                        setPaymentType(newPaymentType);
+                        setShowLoanCalculator(false);
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -867,26 +1017,37 @@ export default function SolarCalculatorPage() {
             <button
               type="button"
               onClick={() => setTemplateMode("group_spec")}
-              className={`flex-1 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 ${
+              className={`flex-1 py-2 rounded-xl transition flex items-center justify-center gap-1 ${
                 templateMode === "group_spec"
                   ? "bg-white text-teal-900 shadow-sm"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              <span>🌞 Group Booking Spec</span>
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              <span>🌞 Group Spec</span>
             </button>
 
             <button
               type="button"
               onClick={() => setTemplateMode("detailed_quote")}
-              className={`flex-1 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 ${
+              className={`flex-1 py-2 rounded-xl transition flex items-center justify-center gap-1 ${
                 templateMode === "detailed_quote"
                   ? "bg-white text-teal-900 shadow-sm"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              <span>📊 Customer Proposal</span>
+              <span>📊 Proposal</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTemplateMode("loan_pitch")}
+              className={`flex-1 py-2 rounded-xl transition flex items-center justify-center gap-1 ${
+                templateMode === "loan_pitch"
+                  ? "bg-white text-emerald-900 shadow-sm font-black"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <span>💰 Loan Pitch</span>
             </button>
           </div>
 
@@ -898,6 +1059,8 @@ export default function SolarCalculatorPage() {
                 <span className="text-xs font-black uppercase tracking-wider text-slate-800">
                   {templateMode === "group_spec"
                     ? "WhatsApp Group Message (OK ആയ സ്പെസിഫിക്കേഷൻ)"
+                    : templateMode === "loan_pitch"
+                    ? "സോളാർ ലോൺ & സബ്സിഡി കാൽക്കുലേഷൻ Pitch"
                     : "Customer WhatsApp Proposal"}
                 </span>
               </div>
@@ -922,6 +1085,8 @@ export default function SolarCalculatorPage() {
                 <span>
                   {templateMode === "group_spec"
                     ? "Post to WhatsApp Group / Customer"
+                    : templateMode === "loan_pitch"
+                    ? "Send Loan Pitch via WhatsApp"
                     : "Send Quotation via WhatsApp"}
                 </span>
               </button>

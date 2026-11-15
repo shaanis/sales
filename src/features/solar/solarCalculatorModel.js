@@ -13,30 +13,81 @@ export function calculateSubsidy(systemKw, isResidential = true) {
   return 78000; // Capped at ₹78,000 for 3kW and above
 }
 
-// Default turnkey market prices in Kerala (Mono PERC / Bi-facial panels + Tier-1 Inverter + Structure + KSEB Net Metering)
-export const DEFAULT_PRICING = {
-  1: 70000,
-  2: 135000,
-  3: 185000,
-  4: 240000,
-  5: 295000,
-  6: 350000,
-  7: 405000,
-  8: 460000,
-  9: 515000,
-  10: 565000,
+// Official ECHONIX turnkey rates in Kerala (With KSEB Net Metering, Structure & Delivery)
+// Exact company price ranges:
+// 3 kW Normal: ₹2,15,000 - ₹2,20,000 | + Optimizer: ₹2,25,000 - ₹2,30,000
+// 4 kW Normal: ₹2,65,000 - ₹2,70,000 | + Optimizer: ₹2,75,000 - ₹2,80,000
+// 5 kW Normal: ₹3,45,000 - ₹3,50,000 | + Optimizer: ₹3,55,000 - ₹3,60,000
+export const ECHONIX_PRICING_TABLE = {
+  1: {
+    normal: { min: 80000, max: 85000, default: 85000 },
+    optimizer: { min: 90000, max: 95000, default: 95000 },
+  },
+  2: {
+    normal: { min: 150000, max: 155000, default: 155000 },
+    optimizer: { min: 160000, max: 165000, default: 165000 },
+  },
+  3: {
+    normal: { min: 215000, max: 220000, default: 220000 },
+    optimizer: { min: 225000, max: 230000, default: 225000 },
+  },
+  4: {
+    normal: { min: 265000, max: 270000, default: 265000 },
+    optimizer: { min: 275000, max: 280000, default: 275000 },
+  },
+  5: {
+    normal: { min: 345000, max: 350000, default: 345000 },
+    optimizer: { min: 355000, max: 360000, default: 355000 },
+  },
+  6: {
+    normal: { min: 415000, max: 420000, default: 415000 },
+    optimizer: { min: 425000, max: 430000, default: 425000 },
+  },
+  7: {
+    normal: { min: 480000, max: 490000, default: 485000 },
+    optimizer: { min: 495000, max: 505000, default: 500000 },
+  },
+  8: {
+    normal: { min: 545000, max: 555000, default: 550000 },
+    optimizer: { min: 560000, max: 570000, default: 565000 },
+  },
+  9: {
+    normal: { min: 610000, max: 620000, default: 615000 },
+    optimizer: { min: 625000, max: 635000, default: 630000 },
+  },
+  10: {
+    normal: { min: 675000, max: 685000, default: 680000 },
+    optimizer: { min: 690000, max: 700000, default: 695000 },
+  },
 };
 
-export function estimateSystemCost(systemKw) {
-  const kw = Math.round(Number(systemKw || 3) * 10) / 10;
-  const intKw = Math.round(kw);
-  if (DEFAULT_PRICING[intKw]) {
-    return DEFAULT_PRICING[intKw];
+export const DEFAULT_PRICING = {
+  1: 85000,
+  2: 155000,
+  3: 220000,
+  4: 265000,
+  5: 345000,
+  6: 415000,
+  7: 485000,
+  8: 550000,
+  9: 615000,
+  10: 680000,
+};
+
+export function getEchonixPriceRange(systemKw, withOptimizer = false) {
+  const kw = Math.round(Number(systemKw || 3));
+  const entry = ECHONIX_PRICING_TABLE[kw];
+  if (entry) {
+    return withOptimizer ? entry.optimizer : entry.normal;
   }
-  if (kw <= 3) {
-    return Math.round(kw * 65000);
-  }
-  return Math.round(kw * 56000);
+  const basePerKw = withOptimizer ? 72000 : 70000;
+  const approx = Math.round(kw * basePerKw);
+  return { min: approx - 5000, max: approx + 5000, default: approx };
+}
+
+export function estimateSystemCost(systemKw, withOptimizer = false) {
+  const range = getEchonixPriceRange(systemKw, withOptimizer);
+  return range.default;
 }
 
 // Default panel count from system kW (based on ~550Wp / 554Wp panels)
@@ -83,9 +134,10 @@ export function calculateSolarMetrics({
   customCost = null,
   isResidential = true,
   tariffPerUnit = 8.0,
+  withOptimizer = false,
 }) {
   const kw = Number(systemKw) || 3;
-  const cost = customCost ? Number(customCost) : estimateSystemCost(kw);
+  const cost = customCost ? Number(customCost) : estimateSystemCost(kw, withOptimizer);
   const subsidy = calculateSubsidy(kw, isResidential);
   const netInvestment = Math.max(0, cost - subsidy);
 

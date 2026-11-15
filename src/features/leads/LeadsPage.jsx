@@ -43,6 +43,7 @@ import {
   CheckCircle,
   SlidersHorizontal,
   Sun,
+  Banknote,
 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
@@ -1992,6 +1993,21 @@ Thank you!
                             <span>Quote</span>
                           </Link>
 
+                          <Link
+                            to={`/solar-loan?leadId=${lead.id}&name=${encodeURIComponent(
+                              lead.name || ""
+                            )}&phone=${encodeURIComponent(
+                              lead.phone || ""
+                            )}&location=${encodeURIComponent(lead.section || "")}&kw=${
+                              lead.systemSizeKw || 3
+                            }`}
+                            title="PM Surya Ghar Diminishing Loan & Subsidy Calculator"
+                            className="px-2 py-1 rounded-lg text-[11px] font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition flex items-center gap-1 active:scale-95 shadow-2xs"
+                          >
+                            <Banknote size={11} className="text-emerald-600" />
+                            <span>Loan</span>
+                          </Link>
+
                           <button
                             type="button"
                             onClick={() => setRescheduleItem(lead)}
@@ -2435,6 +2451,19 @@ Thank you!
                                   className="p-1.5 rounded-lg text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition"
                                 >
                                   <Sun size={13} className="text-amber-500" />
+                                </Link>
+                                <Link
+                                  to={`/solar-loan?leadId=${lead.id}&name=${encodeURIComponent(
+                                    lead.name || ""
+                                  )}&phone=${encodeURIComponent(
+                                    lead.phone || ""
+                                  )}&location=${encodeURIComponent(lead.section || "")}&kw=${
+                                    lead.systemSizeKw || 3
+                                  }`}
+                                  title="Solar Loan & Subsidy Payoff"
+                                  className="p-1.5 rounded-lg text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition"
+                                >
+                                  <Banknote size={13} className="text-emerald-600" />
                                 </Link>
                                 {(lead.siteVisitDate || lead.status === "Visit_Scheduled") && (
                                   <button

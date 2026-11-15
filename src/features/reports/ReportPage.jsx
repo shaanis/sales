@@ -13,7 +13,6 @@ import {
   Sparkles,
   RotateCcw,
   Plus,
-  Mic,
   Zap,
 } from "lucide-react";
 
@@ -35,7 +34,6 @@ import {
   parseCount,
 } from "./model";
 import { autoCompileReportFromDailyActivity } from "./autoFillHelper";
-import VoiceReportModal from "./VoiceReportModal";
 
 const todayString = () => new Date().toLocaleDateString("en-CA");
 
@@ -60,7 +58,6 @@ export default function ReportPage() {
   const [expenses, setExpenses] = useState([]);
   const [leads, setLeads] = useState([]);
   const [followups, setFollowups] = useState([]);
-  const [voiceModalOpen, setVoiceModalOpen] = useState(false);
   const [autoFillSummary, setAutoFillSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -243,18 +240,6 @@ export default function ReportPage() {
     setAutoFillSummary(result.breakdown);
     setNote({
       text: "⚡ Auto-filled report using today's field CRM data & tomorrow's schedule!",
-      type: "success",
-    });
-  }
-
-  // Apply voice-dictated fields
-  function handleApplyVoice(extractedData) {
-    setReport((prev) => ({
-      ...prev,
-      ...extractedData,
-    }));
-    setNote({
-      text: `🎙️ Voice notes applied! Updated ${Object.keys(extractedData).length} fields.`,
       type: "success",
     });
   }
@@ -627,18 +612,18 @@ export default function ReportPage() {
             </span>
           </div>
 
-          {/* Smart Field Automation Bar: 1-Click Auto-Fill & Voice Assistant */}
+          {/* Smart Field Automation Bar: 1-Click Auto-Fill */}
           <div className="mb-5 rounded-2xl bg-gradient-to-r from-teal-900 via-teal-800 to-[#102b32] p-4 text-white shadow-md">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-200 text-[10px] font-black uppercase tracking-wider">
-                  <Sparkles size={11} className="text-teal-300" /> Smart Field Automations
+                  <Sparkles size={11} className="text-teal-300" /> Smart Field Automation
                 </span>
                 <h3 className="text-sm font-extrabold text-white mt-1">
                   Save Time on the Road
                 </h3>
                 <p className="text-[11px] text-teal-200/80">
-                  Compile today&apos;s logged visits and leads in 1 click, or speak your daily update.
+                  Compile today&apos;s logged visits, leads, and tomorrow&apos;s appointments in 1 click.
                 </p>
               </div>
 
@@ -646,21 +631,11 @@ export default function ReportPage() {
                 <button
                   type="button"
                   onClick={handleAutoFillToday}
-                  className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer"
                   title="Auto-calculate counts from today's leads, visits, and tomorrow's appointments"
                 >
-                  <Zap size={14} className="fill-slate-950" />
-                  <span>1-Click Auto-Fill</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setVoiceModalOpen(true)}
-                  className="px-3.5 py-2 rounded-xl bg-teal-500/30 hover:bg-teal-500/40 text-white font-extrabold text-xs flex items-center gap-1.5 border border-teal-400/30 transition active:scale-95 cursor-pointer"
-                  title="Speak your report in English or Malayalam"
-                >
-                  <Mic size={14} className="text-teal-300" />
-                  <span>Voice Assistant</span>
+                  <Zap size={15} className="fill-slate-950" />
+                  <span>1-Click Auto-Fill Report</span>
                 </button>
               </div>
             </div>
@@ -890,13 +865,6 @@ export default function ReportPage() {
           </div>
         </aside>
       </div>
-
-      {/* Voice Assistant Modal */}
-      <VoiceReportModal
-        isOpen={voiceModalOpen}
-        onClose={() => setVoiceModalOpen(false)}
-        onApplyExtracted={handleApplyVoice}
-      />
     </>
   );
 }
