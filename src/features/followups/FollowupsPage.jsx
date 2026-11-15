@@ -1089,28 +1089,29 @@ export default function FollowupsPage() {
                   Cancel
                 </button>
 
-              <button
-                type="submit"
-                className="btn primary"
-                disabled={saving}
-              >
-                {saving ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Saving...
-                  </>
-                ) : editingId ? (
-                  <>
-                    <CheckCircle2 size={16} />
-                    Update Follow-up
-                  </>
-                ) : (
-                  <>
-                    <Plus size={16} />
-                    Schedule Appointment
-                  </>
-                )}
-              </button>
+                <button
+                  type="submit"
+                  className="btn primary"
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Saving...
+                    </>
+                  ) : editingId ? (
+                    <>
+                      <CheckCircle2 size={16} />
+                      Update Follow-up
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={16} />
+                      Schedule Appointment
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </form>
         </section>
