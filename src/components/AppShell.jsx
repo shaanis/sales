@@ -28,6 +28,7 @@ import {
   WifiOff,
   Sun,
   Banknote,
+  BarChart3,
 } from "lucide-react";
 
 import { useAuth } from "../features/auth/AuthProvider";
@@ -117,6 +118,7 @@ export default function AppShell({ children }) {
       badge: todayFollowupsCount > 0 ? todayFollowupsCount : null,
     },
     { path: "/report", label: "Daily report", Icon: ClipboardList },
+    { path: "/monthly-report", label: "Monthly analytics", Icon: BarChart3 },
     { path: "/calculator", label: "Solar Quote & Sizer", Icon: Sun },
     { path: "/solar-loan", label: "Solar Loan & Subsidy", Icon: Banknote },
     { path: "/expenses", label: "Travel & expenses", Icon: CarFront },
@@ -131,6 +133,13 @@ export default function AppShell({ children }) {
 
   // Secondary items shown inside the "More" mobile bottom sheet
   const secondaryNavigation = [
+    {
+      path: "/monthly-report",
+      label: "Monthly Report & Charts",
+      desc: "Interactive diagrams, KPI trends & conversion funnel",
+      Icon: BarChart3,
+      color: "bg-teal-50 text-teal-800",
+    },
     {
       path: "/calculator",
       label: "Solar Sizer & Quotation",
@@ -178,6 +187,8 @@ export default function AppShell({ children }) {
   // Check if current route is in secondary navigation
   const isSecondaryActive = useMemo(() => {
     return [
+      "/monthly-report",
+      "/monthly",
       "/calculator",
       "/solar-quote",
       "/solar-loan",
@@ -199,6 +210,9 @@ export default function AppShell({ children }) {
         return "Visits & Appointments";
       case "/report":
         return "Daily Sales Report";
+      case "/monthly-report":
+      case "/monthly":
+        return "Monthly Report & Charts";
       case "/calculator":
       case "/solar-quote":
         return "Solar Sizer & Quotation";

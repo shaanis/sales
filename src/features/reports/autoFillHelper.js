@@ -176,11 +176,24 @@ export function autoCompileReportFromDailyActivity({
     );
   }
 
-  // PO Count
+  // PO Count & Closures
   if (breakdown.detectedPos > 0 || !compiled.poCount) {
     compiled.poCount = String(
-      Math.max(parseCount(compiled.poCount), breakdown.detectedPos) || ""
+      Math.max(parseCount(compiled.poCount), breakdown.detectedPos) || "0"
     );
+  }
+  compiled.closure = compiled.closure && compiled.closure !== "0"
+    ? compiled.closure
+    : compiled.poCount || "0";
+
+  // Documents to Bank
+  if (!compiled.docsBank) {
+    compiled.docsBank = "0";
+  }
+
+  // B2B Visits
+  if (!compiled.dealerVisits) {
+    compiled.dealerVisits = "0";
   }
 
   // Payment Collected

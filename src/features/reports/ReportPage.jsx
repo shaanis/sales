@@ -14,6 +14,9 @@ import {
   RotateCcw,
   Plus,
   Zap,
+  BarChart3,
+  ArrowUpRight,
+  ClipboardList,
 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
@@ -264,9 +267,15 @@ export default function ReportPage() {
     setNote({ text: "", type: "info" });
 
     try {
-      // Ensure dynamic MTD totals are saved into Firestore
+      // Ensure dynamic MTD totals and new daily fields are saved into Firestore
       const dataToSave = {
         ...reportWithMtd,
+        closure:
+          report.closure !== undefined && report.closure !== ""
+            ? report.closure
+            : report.poCount || "0",
+        docsBank: report.docsBank || "0",
+        dealerVisits: report.dealerVisits || "0",
         ownerUid: user.uid,
       };
 
@@ -468,14 +477,48 @@ export default function ReportPage() {
 
   return (
     <>
-      <header className="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Top View Switcher: Daily Report vs Monthly Report & Charts */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 border-b border-slate-200/80 pb-3">
         <div>
-          <div className="eyebrow">FIELD SALES WORKSPACE</div>
-          <h1>Daily sales report</h1>
-          <p>
-            Enter today&apos;s field work once. MTD metrics and your WhatsApp
-            report update automatically.
+          <div className="eyebrow flex items-center gap-1.5 text-teal-700 font-bold tracking-wider">
+            <ClipboardList size={14} /> FIELD SALES WORKSPACE
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
+            Daily Sales Report
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+            Log today&apos;s field work and focus items. Live WhatsApp report formats instantly.
           </p>
+        </div>
+
+        <div className="flex items-center gap-1.5 p-1 bg-slate-200/80 rounded-2xl w-fit shadow-inner">
+          <button
+            type="button"
+            className="px-4 py-2 rounded-xl text-xs font-black bg-white text-teal-900 shadow-sm cursor-default"
+          >
+            📝 Daily Report
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/monthly-report")}
+            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 transition cursor-pointer flex items-center gap-1"
+          >
+            <BarChart3 size={13} className="text-teal-700" />
+            <span>Monthly Report & Charts</span>
+          </button>
+        </div>
+      </div>
+
+      <header className="page-header flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-slate-500">
+            Target Date: <strong className="text-slate-800">{formatDisplayDate(report.date)}</strong>
+          </span>
+          {report.executive && (
+            <span className="text-xs font-semibold text-slate-500">
+              • Executive: <strong className="text-teal-800">{report.executive}</strong>
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -714,46 +757,52 @@ export default function ReportPage() {
             {todayFields.map(renderTodayField)}
           </div>
 
-          {/* MTD Section */}
+          {/* Tomorrow's Top 3 Focus */}
           <div className="flex items-center justify-between mt-8 pt-5 border-t border-slate-100">
-            <div>
-              <h3 className="section-title m-0 p-0 border-0 flex items-center gap-2">
-                Month-to-date (MTD)
-                {autoMtd && (
-                  <span className="text-[10px] font-bold tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                    <Sparkles size={11} /> AUTO-CALCULATED
-                  </span>
-                )}
-              </h3>
-              <p className="hint intro mt-1">
-                Calculated dynamically from {mtdCalc.daysLoggedThisMonth}{" "}
-                {mtdCalc.daysLoggedThisMonth === 1 ? "day" : "days"} logged this
-                month.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setAutoMtd((v) => !v)}
-              className="text-xs font-semibold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 px-2.5 py-1.5 rounded-lg transition"
-            >
-              {autoMtd ? "Edit MTD manually" : "Reset to Auto MTD"}
-            </button>
+            <h3 className="section-title m-0 p-0 border-0 flex items-center gap-2">
+              🎯 Tomorrow&apos;s top 3 focus
+            </h3>
+            <span className="text-xs text-slate-400">
+              Key action items planned for tomorrow
+            </span>
           </div>
 
           <div className="form-grid mt-3">
-            {mtdFields.map(renderMtdField)}
-          </div>
-
-          {/* Tomorrow's Top 3 Focus */}
-          <h3 className="section-title">Tomorrow&apos;s top 3 focus</h3>
-
-          <div className="form-grid">
             {[
-              ["focus1", "Priority 1", "First task to complete"],
+              ["focus1", "Priority 1", "First task to complete tomorrow"],
               ["focus2", "Priority 2", "Second task"],
               ["focus3", "Priority 3", "Third task"],
             ].map(renderTodayField)}
+          </div>
+
+          {/* Monthly Performance & Charts Teaser Banner */}
+          <div className="mt-8 pt-5 border-t border-slate-100">
+            <div className="rounded-2xl bg-gradient-to-r from-teal-50 via-slate-50 to-indigo-50/60 border border-teal-200/80 p-4 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 text-teal-800 text-xs font-black uppercase tracking-wider">
+                    <BarChart3 size={15} />
+                    <span>Monthly Sales Report & Charts</span>
+                  </div>
+                  <h4 className="text-sm font-extrabold text-slate-900">
+                    Month-to-Date Progress ({mtdCalc.daysLoggedThisMonth}{" "}
+                    {mtdCalc.daysLoggedThisMonth === 1 ? "day" : "days"} logged this month)
+                  </h4>
+                  <p className="text-xs text-slate-600">
+                    Surveys: <strong className="text-emerald-700">{mtdCalc.totals.mtdSiteSurvey}</strong> • Revisits: <strong className="text-sky-700">{mtdCalc.totals.mtdRevisits}</strong> • B2B: <strong className="text-purple-700">{mtdCalc.totals.mtdDealerVisits}</strong> • Total Closures: <strong className="text-amber-800">{mtdCalc.totals.mtdClosure}</strong>
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => navigate("/monthly-report")}
+                  className="px-4 py-2.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition active:scale-95 shrink-0 self-start sm:self-auto cursor-pointer"
+                >
+                  <span>Open Monthly Diagrams</span>
+                  <ArrowUpRight size={15} />
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Quick jump to preview on mobile */}

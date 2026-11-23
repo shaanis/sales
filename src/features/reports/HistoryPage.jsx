@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Loader2,
   Pencil,
+  BarChart3,
 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthProvider";
@@ -273,17 +274,28 @@ export default function HistoryPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3.5 bg-white border border-slate-200/80 rounded-xl px-4 py-3 shadow-sm self-start sm:self-auto">
-            <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <FileText size={20} />
-            </div>
-            <div>
-              <span className="block text-xs font-medium uppercase tracking-wider text-slate-400">
-                Total reports
-              </span>
-              <strong className="text-xl font-bold text-slate-900 leading-none">
-                {items.length}
-              </strong>
+          <div className="flex items-center gap-3 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => navigate("/monthly-report")}
+              className="px-3.5 py-2.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs flex items-center gap-1.5 border border-teal-200 transition cursor-pointer shadow-xs"
+            >
+              <BarChart3 size={15} />
+              <span>Monthly Analytics & Charts</span>
+            </button>
+
+            <div className="flex items-center gap-3.5 bg-white border border-slate-200/80 rounded-xl px-4 py-3 shadow-sm">
+              <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <FileText size={20} />
+              </div>
+              <div>
+                <span className="block text-xs font-medium uppercase tracking-wider text-slate-400">
+                  Total reports
+                </span>
+                <strong className="text-xl font-bold text-slate-900 leading-none">
+                  {items.length}
+                </strong>
+              </div>
             </div>
           </div>
         </header>

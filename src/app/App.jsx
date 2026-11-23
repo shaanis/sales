@@ -5,6 +5,7 @@ import { useAuth } from "../features/auth/AuthProvider";
 import AuthPage from "../features/auth/AuthPage";
 import DashboardPage from "../features/dashboard/DashboardPage";
 import ReportPage from "../features/reports/ReportPage";
+import MonthlyReportPage from "../features/reports/MonthlyReportPage";
 import ExpensesPage from "../features/expenses/ExpensesPage";
 import HistoryPage from "../features/reports/HistoryPage";
 import AppShell from "../components/AppShell";
@@ -78,6 +79,28 @@ export default function App() {
           <ProtectedRoute>
             <AppShell>
               <ReportPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/monthly-report"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <MonthlyReportPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/monthly"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <MonthlyReportPage />
             </AppShell>
           </ProtectedRoute>
         }
